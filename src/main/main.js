@@ -23,6 +23,7 @@ const { SessionHub } = require('./sessions');
 const { Bridge } = require('./bridge');
 const { Skins } = require('./skins');
 const { Runner, isLongContextError } = require('./runner');
+const transcripts = require('./transcripts');
 const terminals = require('./terminals');
 const { IMAGE_SLOTS, SOUND_SLOTS, DEFAULT_SETTINGS } = require('./defaults');
 
@@ -520,7 +521,7 @@ async function connectClaude(ask = true) {
       message: 'Claude Code 와 연결할까요?',
       detail:
         '~/.claude/settings.json 에 알림용 훅을 추가해요. 기존 설정은 그대로 두고, 바꾸기 전에 백업(settings.json.codepup-backup)을 남겨요.\n\n' +
-        '연결하면 세션이 끝나거나 허락이 필요할 때 펫이 알려 주고, 펫에서 바로 허락·거절할 수 있어요. 이미 열려 있던 세션은 다시 시작해야 적용돼요.',
+        '연결하면 세션이 끝나거나 허락이 필요할 때 펫이 알려 주고, 펫에서 바로 허락·거절할 수 있어요. 상태 표시줄로 5시간·주간 한도와 컨텍스트 사용률도 보여 줘요. 쓰시던 상태 표시줄(claude-hud 등)은 그대로 이어서 나와요.',
     });
     if (res.response !== 1) return { ok: false, canceled: true };
   }
@@ -557,6 +558,35 @@ async function restoreSessions(ids) {
   const results = await terminals.openSessions(list, restoreOptions());
   const failed = results.filter((r) => !r.ok);
   return failed.length ? { ok: false, error: failed[0].error, opened: results.length - failed.length } : { ok: true, opened: results.length };
+}
+
+function fmtLeft(resetsAt) {
+  const sec = Math.max(0, Math.round(resetsAt - Date.now() / 1000));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h >= 24) return `${Math.floor(h / 24)}일 ${h % 24}시간`;
+  return h ? `${h}시간 ${m}분` : `${m}분`;
+}
+
+function onLimits({ limits, alert }) {
+  sendToAll('limits:changed', limits);
+  if (tray) tray.update({ limits });
+  if (alert) {
+    const msg =
+      alert.level >= 95
+        ? `5시간 한도 ${Math.round(alert.pct)}%! 거의 다 썼어요… ${fmtLeft(alert.resetsAt)} 뒤 초기화`
+        : `5시간 한도 ${Math.round(alert.pct)}% 썼어요. ${fmtLeft(alert.resetsAt)} 뒤 초기화돼요`;
+    sendCommand('say', { text: `⏳ ${msg}`, tex: alert.level >= 80 ? 'worry' : 'surprised' });
+  }
+}
+
+function scanOpenSessions() {
+  try {
+    for (const t of transcripts.scanActive()) hub.observe(t);
+  } catch (err) {
+    console.error('[transcripts]', err);
+  }
+  hub.sweep();
 }
 
 function onHubChanged({ session, event, counts }) {
@@ -660,6 +690,7 @@ function registerIpc() {
     skins: skins.list(),
     skin: skins.get(store.settings.skin),
     sessions: { list: hub.list(), counts: hub.counts(), restorable: hub.restorable() },
+    limits: hub.limits,
     claude: claudeStatus(),
     origin: ORIGIN,
     version: app.getVersion(),
@@ -849,6 +880,7 @@ app.whenReady().then(async () => {
 
   hub = new SessionHub({ getSettings: () => store.settings, history: store.sessionsHistory });
   hub.on('changed', onHubChanged);
+  hub.on('limits', onLimits);
   bridge = new Bridge({ hub, onError: (err) => console.error('[bridge]', err) });
   runner = new Runner();
   runner.on('started', (t) => sendToAll('task:started', t));
@@ -897,6 +929,9 @@ app.whenReady().then(async () => {
 
   createPetWindow();
   setInterval(petLoop, TICK_MS);
+  // 이미 열려 있던 세션 찾기 · 신호 끊긴 세션 정리
+  setTimeout(scanOpenSessions, 1500);
+  setInterval(scanOpenSessions, 15000);
 
   globalShortcut.register(PANEL_SHORTCUT, () => openPanel({ toggle: true }));
   globalShortcut.register(PROMPT_SHORTCUT, () => handleMenuAction('open-prompt'));

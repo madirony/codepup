@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('codepup', {
   onPromptTarget: listen('prompt:target'),
   onTaskStarted: listen('task:started'),
   onTaskFinished: listen('task:finished'),
+  onLimits: listen('limits:changed'),
 
   // 펫 창
   setIgnoreMouse: (ignore) => ipcRenderer.send('pet:ignore-mouse', ignore),

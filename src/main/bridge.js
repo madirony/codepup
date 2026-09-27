@@ -57,12 +57,37 @@ OUT=$(curl -s --max-time "$MAXT" -X POST \\
 exit 0
 `;
 
+// 상태 표시줄: 받은 JSON 을 CodePup 에 넘기고, 원래 쓰던 상태 표시줄 명령이 있으면 그대로 실행해서 보여 줘요.
+const STATUSLINE_MARKER = 'codepup-statusline.sh';
+const STATUSLINE_SCRIPT = `#!/bin/sh
+# CodePup 상태 표시줄 연결 (CodePup 이 설치함 · 연결을 해제하면 원래 설정으로 돌아가요)
+IN=$(cat)
+CONF="$HOME/.codepup/bridge.env"
+if [ -r "$CONF" ]; then
+  . "$CONF"
+  if [ -n "$CODEPUP_PORT" ]; then
+    printf '%s' "$IN" | curl -s --max-time 2 -X POST \\
+      -H "Authorization: Bearer $CODEPUP_TOKEN" -H "Content-Type: application/json" \\
+      --data-binary @- "http://127.0.0.1:$CODEPUP_PORT/status" >/dev/null 2>&1 &
+  fi
+fi
+PREV="$HOME/.codepup/statusline-prev.sh"
+if [ -r "$PREV" ]; then
+  printf '%s' "$IN" | sh "$PREV"
+else
+  printf '🐶 CodePup'
+fi
+`;
+
 class Bridge {
   constructor({ hub, homeDir = os.homedir(), onError = () => {} }) {
     this.hub = hub;
     this.dir = path.join(homeDir, '.codepup');
     this.envFile = path.join(this.dir, 'bridge.env');
     this.scriptFile = path.join(this.dir, 'codepup-hook.sh');
+    this.statusScript = path.join(this.dir, STATUSLINE_MARKER);
+    this.prevStatusJson = path.join(this.dir, 'statusline-prev.json');
+    this.prevStatusScript = path.join(this.dir, 'statusline-prev.sh');
     this.claudeSettings = path.join(homeDir, '.claude', 'settings.json');
     this.token = crypto.randomBytes(24).toString('hex');
     this.server = null;
@@ -107,8 +132,9 @@ class Bridge {
     if (auth.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
       return send(401, { error: 'unauthorized' });
     }
+    const isStatus = req.url === '/status';
     const m = /^\/hook\/([A-Za-z]+)$/.exec(req.url || '');
-    if (req.method !== 'POST' || !m) return send(404, { error: 'not found' });
+    if (req.method !== 'POST' || (!m && !isStatus)) return send(404, { error: 'not found' });
 
     let size = 0;
     const chunks = [];
@@ -123,6 +149,14 @@ class Bridge {
         payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
       } catch {
         return send(400, { error: 'bad json' });
+      }
+      if (isStatus) {
+        try {
+          this.hub.status(payload);
+        } catch (err) {
+          this.onError(err);
+        }
+        return send(200, null);
       }
       // 훅이 취소되면(터미널에서 먼저 답했거나 타임아웃) 대기도 함께 정리
       const ac = new AbortController();
@@ -158,7 +192,7 @@ class Bridge {
   isInstalled() {
     try {
       const s = this.readClaudeSettings();
-      return HOOK_EVENTS.every(({ event }) => JSON.stringify((s.hooks || {})[event] || []).includes(MARKER));
+      return HOOK_EVENTS.every(({ event }) => JSON.stringify((s.hooks || {})[event] || []).includes(MARKER)) && this.isOurStatusLine(s.statusLine);
     } catch {
       return false;
     }
@@ -173,6 +207,7 @@ class Bridge {
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     fs.writeFileSync(this.scriptFile, HOOK_SCRIPT, { mode: 0o755 });
     const settings = this.stripOurs(this.readClaudeSettings());
+    this.installStatusLine(settings);
     settings.hooks = settings.hooks || {};
     for (const h of HOOK_EVENTS) {
       const hook = { type: 'command', command: this.hookCommand(h.event) };
@@ -186,8 +221,52 @@ class Bridge {
 
   uninstall() {
     const settings = this.stripOurs(this.readClaudeSettings());
+    this.restoreStatusLine(settings);
     this.writeClaudeSettings(settings);
     return true;
+  }
+
+  isOurStatusLine(sl) {
+    return !!(sl && String(sl.command || '').includes(STATUSLINE_MARKER));
+  }
+
+  // 원래 상태 표시줄(예: claude-hud)은 기억해 두고, 우리 스크립트가 그 명령을 이어서 실행
+  installStatusLine(settings) {
+    fs.writeFileSync(this.statusScript, STATUSLINE_SCRIPT, { mode: 0o755 });
+    const prev = settings.statusLine;
+    if (prev && !this.isOurStatusLine(prev)) {
+      fs.writeFileSync(this.prevStatusJson, JSON.stringify(prev, null, 2));
+      if (prev.type === 'command' && prev.command) {
+        fs.writeFileSync(this.prevStatusScript, `#!/bin/sh\n# 원래 쓰던 상태 표시줄 명령\n${prev.command}\n`, { mode: 0o755 });
+      }
+    }
+    const saved = this.readPrevStatusLine();
+    const ours = { type: 'command', command: `sh "${this.statusScript}"`, refreshInterval: 5 };
+    if (saved && Number.isFinite(saved.padding)) ours.padding = saved.padding;
+    if (saved && Number.isFinite(saved.refreshInterval)) ours.refreshInterval = Math.min(5, saved.refreshInterval);
+    settings.statusLine = ours;
+  }
+
+  readPrevStatusLine() {
+    try {
+      return JSON.parse(fs.readFileSync(this.prevStatusJson, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  restoreStatusLine(settings) {
+    if (settings.statusLine && !this.isOurStatusLine(settings.statusLine)) return; // 사용자가 이미 바꿨으면 그대로
+    const saved = this.readPrevStatusLine();
+    if (saved) settings.statusLine = saved;
+    else delete settings.statusLine;
+    for (const f of [this.prevStatusJson, this.prevStatusScript]) {
+      try {
+        fs.unlinkSync(f);
+      } catch {
+        // 없으면 그만
+      }
+    }
   }
 
   stripOurs(settings) {
@@ -220,4 +299,4 @@ class Bridge {
   }
 }
 
-module.exports = { Bridge, HOOK_EVENTS, HOOK_SCRIPT, MARKER };
+module.exports = { Bridge, HOOK_EVENTS, HOOK_SCRIPT, MARKER, STATUSLINE_SCRIPT, STATUSLINE_MARKER };

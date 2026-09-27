@@ -838,6 +838,15 @@
       case 'started':
         if (!bubbleNotice) say(`🐾 ${session.name} 세션을 지켜볼게요!`, 1800);
         break;
+      case 'context':
+        if (!bubbleNotice) {
+          noticeAnim('worry', ['🧠']);
+          say(`🧠 ${session.name} 컨텍스트 ${event.pct}%… 곧 자동 압축(compact)돼요`, 8000, true);
+        }
+        break;
+      case 'discovered':
+        if (!bubbleNotice) say(`👀 ${session.name} 세션을 찾았어요!`, 1800);
+        break;
       case 'task-failed':
         noticeAnim('sad', ['💦']);
         say(`😢 ${session.name}: ${clipText(event.error || '실패했어요', 90)}`, 12000, true, {

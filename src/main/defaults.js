@@ -55,7 +55,7 @@ const DEFAULT_SETTINGS = {
   showOnFullscreen: false,
   launchAtLogin: false,
   hidden: false,
-  tray: { cpu: true, mem: true, disk: false, battery: true, animate: true, sessions: true },
+  tray: { cpu: true, mem: false, disk: false, battery: false, animate: true, sessions: true, limits: true },
   // Claude Code 연동
   awayMode: false, // 자리 비움: 작업이 끝나면 펫에서 다음 지시를 기다림
   permissionWaitSec: 60, // 펫에서 권한 요청에 답할 수 있는 시간 (지나면 터미널 창으로)

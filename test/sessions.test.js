@@ -260,3 +260,121 @@ test('러너: 1M 컨텍스트 권한 오류를 알아보고, 모델을 지정하
   assert.equal(isLongContextError('API Error: Usage credits required for 1M context'), true);
   assert.equal(isLongContextError('rate limited'), false);
 });
+
+const { STATUSLINE_MARKER } = require('../src/main/bridge');
+const { parseTail, scanActive } = require('../src/main/transcripts');
+
+const statusPayload = (extra = {}) => ({
+  session_id: 'open-1',
+  cwd: '/Users/me/work/already-open',
+  transcript_path: '/tmp/o.jsonl',
+  model: { id: 'claude-sonnet-5', display_name: 'Sonnet' },
+  context_window: { used_percentage: 42, context_window_size: 1000000 },
+  cost: { total_cost_usd: 0.52 },
+  rate_limits: { five_hour: { used_percentage: 23.5, resets_at: 1790000000 }, seven_day: { used_percentage: 41.2, resets_at: 1790500000 } },
+  ...extra,
+});
+
+test('상태 표시줄: 이미 열린 세션을 찾고 컨텍스트 · 한도를 기록한다', () => {
+  const hub = hubWith();
+  const events = [];
+  const limits = [];
+  hub.on('changed', (e) => events.push(e.event.type));
+  hub.on('limits', (l) => limits.push(l));
+  hub.status(statusPayload());
+  const [s] = hub.list();
+  assert.equal(s.name, 'already-open');
+  assert.equal(s.live, true);
+  assert.deepEqual(s.context, { pct: 42, size: 1000000 });
+  assert.equal(s.model, 'Sonnet');
+  assert.equal(events[0], 'discovered');
+  assert.equal(hub.limits.five_hour.pct, 23.5);
+  assert.equal(limits.length, 1);
+  // 같은 값이 다시 오면 조용히
+  hub.status(statusPayload());
+  assert.equal(events.length, 1);
+  assert.equal(limits.length, 1);
+});
+
+test('상태 표시줄: 한도 50 · 80 · 95% 를 넘을 때 한 번씩만 알린다', () => {
+  const hub = hubWith();
+  const alerts = [];
+  hub.on('limits', (l) => l.alert && alerts.push(l.alert.level));
+  for (const pct of [30, 55, 60, 81, 85, 96, 97]) {
+    hub.status(statusPayload({ rate_limits: { five_hour: { used_percentage: pct, resets_at: 1790000000 } } }));
+  }
+  assert.deepEqual(alerts, [50, 80, 95]);
+  // 창이 초기화되면(resets_at 변경) 다시 알림
+  hub.status(statusPayload({ rate_limits: { five_hour: { used_percentage: 52, resets_at: 1790018000 } } }));
+  assert.deepEqual(alerts, [50, 80, 95, 50]);
+});
+
+test('상태 표시줄: 컨텍스트 85% 를 넘으면 한 번 알리고, 압축 후 다시 알릴 수 있다', () => {
+  const hub = hubWith();
+  const ctx = [];
+  hub.on('changed', (e) => e.event.type === 'context' && ctx.push(e.event.pct));
+  for (const pct of [70, 86, 90, 20, 88]) hub.status(statusPayload({ context_window: { used_percentage: pct } }));
+  assert.deepEqual(ctx, [86, 88]);
+});
+
+test('정리: 상태 표시줄 신호가 끊긴 세션은 닫힌 세션으로 옮긴다', () => {
+  let t = 1_000_000;
+  const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
+  hub.status(statusPayload());
+  t += 30_000;
+  hub.sweep();
+  assert.equal(hub.list().length, 1);
+  t += 120_000;
+  hub.sweep();
+  assert.equal(hub.list().length, 0);
+  assert.equal(hub.restorable()[0].id, 'open-1');
+});
+
+test('대화 기록 파일로 열린 세션을 찾는다', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codepup-home-'));
+  const dir = path.join(home, '.claude', 'projects', '-Users-me-work-app');
+  fs.mkdirSync(dir, { recursive: true });
+  const lines = [
+    { type: 'user', sessionId: 'tx-1', cwd: '/Users/me/work/app', message: { content: 'hi' } },
+    { type: 'assistant', sessionId: 'tx-1', cwd: '/Users/me/work/app', message: { stop_reason: 'end_turn' } },
+  ];
+  fs.writeFileSync(path.join(dir, 'tx-1.jsonl'), '{"broken\n' + lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const found = scanActive({ home });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].session_id, 'tx-1');
+  assert.equal(parseTail('garbage\n'), null);
+  const hub = hubWith();
+  hub.observe(found[0]);
+  assert.equal(hub.list()[0].name, 'app');
+  assert.equal(scanActive({ home, now: Date.now() + 10 * 60000 }).length, 0);
+});
+
+test('설치기: 쓰던 상태 표시줄(claude-hud 등)은 이어서 실행하고, 해제하면 되돌린다', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codepup-home-'));
+  const file = path.join(home, '.claude', 'settings.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const hud = { type: 'command', command: 'echo "[HUD] $(cat | wc -c)"', padding: 1 };
+  fs.writeFileSync(file, JSON.stringify({ statusLine: hud }));
+  const hub = hubWith();
+  const bridge = new Bridge({ hub, homeDir: home });
+  await bridge.start();
+  try {
+    bridge.install();
+    const s = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.ok(s.statusLine.command.includes(STATUSLINE_MARKER));
+    assert.equal(s.statusLine.refreshInterval, 5);
+    assert.equal(s.statusLine.padding, 1);
+    // Claude Code 처럼 상태 표시줄 명령 실행 → 원래 HUD 출력 + CodePup 에 데이터 전달
+    const out = await new Promise((resolve, reject) => {
+      const child = execFile('sh', ['-c', s.statusLine.command], { env: { ...process.env, HOME: home } }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+      child.stdin.end(JSON.stringify(statusPayload()));
+    });
+    assert.match(out, /^\[HUD\] \d+/);
+    for (let i = 0; i < 40 && !hub.list().length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(hub.list()[0].id, 'open-1');
+    bridge.uninstall();
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).statusLine, hud);
+  } finally {
+    bridge.stop();
+  }
+});

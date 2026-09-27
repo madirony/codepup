@@ -101,6 +101,6 @@ test('저장된 설정이 일부만 있어도 기본값과 합쳐진다', () => 
   const s = mergeSettings({ size: 50, tray: { cpu: false } });
   assert.equal(s.size, 50);
   assert.equal(s.tray.cpu, false);
-  assert.equal(s.tray.mem, true);
+  assert.equal(s.tray.limits, true);
   assert.deepEqual(s.customImages, {});
 });
