@@ -177,7 +177,14 @@ app.whenReady().then(async () => {
   await wait(2500);
   check('착지 후 어지러워한다', ['dizzy', 'wander', 'idle'].includes(await run('window.__codepup.state')));
 
-  // 9) 스킨 폴더 불러오기 (skin.json 없이 표정 이름으로 된 이미지만 있어도 됨)
+  // 9) 기본 제공 스피키 스킨으로 바꾸기
+  await run(`window.codepup.updateSettings({ skin: 'speaki' })`);
+  await wait(2500);
+  const sk = await run(`window.codepup.init().then((b) => ({ id: b.skin.id, name: b.settings.name }))`);
+  check('스피키 스킨으로 바꾸면 이름도 스피키', sk.id === 'speaki' && sk.name === '스피키', JSON.stringify(sk));
+  await shot(pet, '06-speaki-skin.png');
+
+  // 9-2) 스킨 폴더 불러오기 (skin.json 없이 표정 이름으로 된 이미지만 있어도 됨)
   const skinDir = path.join(OUT, 'my-cat-skin');
   fs.mkdirSync(skinDir, { recursive: true });
   for (const n of ['default', 'happy', 'alert']) {

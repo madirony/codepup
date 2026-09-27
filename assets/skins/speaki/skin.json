@@ -1,0 +1,96 @@
+{
+  "name": "스피키",
+  "description": "트릭컬 팬메이드 스킨 (비상업적 개인 사용)",
+  "defaultName": "스피키",
+  "catchphrase": "쪼아요~",
+  "phrases": [
+    "쪼아요~",
+    "쪼아요~ 쪼아요~",
+    "스피키!",
+    "헤헤",
+    "놀아주세요!",
+    "오늘도 화이팅이에요~"
+  ],
+  "voice": {
+    "type": "files"
+  },
+  "images": {
+    "default": "default.png",
+    "happy": "happy.png",
+    "eat": "eat.png",
+    "eat2": "eat2.png",
+    "sleep": "sleep.png",
+    "hungry": "hungry.png",
+    "tired": "tired.png",
+    "carry": "carry.png",
+    "run": "run.png",
+    "dizzy": "dizzy.png",
+    "sing": "sing.png",
+    "annoyed": "annoyed.png",
+    "levelup": "levelup.png",
+    "food": "food.png",
+    "alert": "alert.png",
+    "worry": "worry.png",
+    "surprised": "surprised.png",
+    "drool": "drool.png",
+    "cry": "cry.png",
+    "sneeze": "sneeze.png",
+    "sad": "sad.png",
+    "zoom": "zoom.png",
+    "expr_9": "expr_9.png",
+    "expr_12": "expr_12.png",
+    "expr_19": "expr_19.png",
+    "expr_22": "expr_22.png",
+    "expr_24": "expr_24.png"
+  },
+  "expressions": [
+    "expr_9",
+    "expr_12",
+    "expr_19",
+    "expr_22",
+    "expr_24",
+    "surprised",
+    "happy"
+  ],
+  "sounds": {
+    "greet": [
+      "sound/speaki.mp3"
+    ],
+    "happy": [
+      "sound/chuayo.mp3"
+    ],
+    "done": [
+      "sound/speaki.mp3"
+    ],
+    "permission": [
+      "sound/a.mp3"
+    ],
+    "carry": [
+      "sound/deruzibazeyo.mp3"
+    ],
+    "carryHead": [
+      "sound/morijabadangizibazeyo.mp3"
+    ],
+    "flung": [
+      "sound/deruzibazeyoonly.mp3"
+    ],
+    "squish": [
+      "sound/aau.mp3"
+    ],
+    "annoyed": [
+      "sound/notviolence.mp3"
+    ],
+    "sing": [
+      "sound/murugorureziru.mp3",
+      "sound/sunbakochi.mp3",
+      "sound/squash.mp3"
+    ],
+    "levelup": [
+      "sound/speaki.mp3"
+    ]
+  },
+  "extraSounds": [
+    "sound/fullbazeyo.mp3",
+    "sound/uaa.mp3"
+  ]
+}
