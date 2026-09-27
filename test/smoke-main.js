@@ -119,6 +119,9 @@ app.whenReady().then(async () => {
   check('5시간 한도 80% 를 넘으면 펫이 알려 준다', limitBubble.includes('5시간 한도 82%'), limitBubble);
   await shot(pet, '02b-limit.png');
 
+  const awakeState = await run('window.codepup.init().then((b) => b.awake)');
+  check('☕ Claude 세션이 있으면 잠자기 방지가 켜진다', awakeState && awakeState.active && awakeState.reason, JSON.stringify(awakeState));
+
   // 3) 권한 요청 → 펫 말풍선의 [허락] 버튼을 실제 마우스로 클릭
   await run('window.__codepup.P.state = "idle"; window.__codepup.P.dur = 60');
   const permP = hook('PermissionRequest', { ...s1, tool_name: 'Bash', tool_input: { command: 'npm install bcrypt' } });

@@ -27,7 +27,7 @@ class PetTray {
     this.sleepFrame = fallback;
     this.frameIndex = 0;
     this.animTimer = null;
-    this.state = { stats: null, pet: null, settings: null, sessions: null, limits: null };
+    this.state = { stats: null, pet: null, settings: null, sessions: null, limits: null, awake: null };
     // macOS는 setContextMenu 만으로 클릭 시 메뉴가 열리고, Windows는 왼쪽 클릭도 메뉴를 열도록
     if (process.platform !== 'darwin') this.tray.on('click', () => this.tray.popUpContextMenu());
     this.scheduleFrame();
@@ -82,6 +82,7 @@ class PetTray {
       if (waiting) parts.push(`🔔${waiting}`);
       else if (c.working) parts.push(`⚙️${c.working}`);
     }
+    if (this.state.awake && this.state.awake.active) parts.push('☕');
     const lim = this.state.limits;
     if (t.limits !== false && lim) {
       if (lim.five_hour) parts.push(`5h ${Math.round(lim.five_hour.pct)}%`);
@@ -184,6 +185,24 @@ class PetTray {
     };
     if (lim && lim.five_hour) items.push({ label: `⏳  5시간 한도  ${bar(lim.five_hour.pct)}  ${Math.round(lim.five_hour.pct)}%  · ${left(lim.five_hour.resetsAt)} 뒤 초기화`, enabled: false });
     if (lim && lim.seven_day) items.push({ label: `📅  주간 한도  ${bar(lim.seven_day.pct)}  ${Math.round(lim.seven_day.pct)}%  · ${left(lim.seven_day.resetsAt)} 뒤 초기화`, enabled: false });
+    const aw = this.state.awake || {};
+    let awakeText = '☕  잠자기 방지 꺼짐';
+    if (aw.active && aw.manual) awakeText = '☕  계속 깨어 있는 중 (직접 켬)';
+    else if (aw.active && aw.reason && aw.reason.kind === 'open') awakeText = `☕  Claude 세션 ${aw.reason.count}개가 열려 있어서 맥이 잠들지 않아요`;
+    else if (aw.active && aw.reason) awakeText = `☕  Claude 작업 중이라 맥이 잠들지 않아요 (${aw.reason.kind === 'task' ? '펫이 시킨 작업' : `세션 ${aw.reason.count}개`})`;
+    else if (aw.active) awakeText = '☕  작업이 끝나서 곧 잠자기 방지를 풀어요';
+    else if (aw.external) awakeText = '☕  다른 앱이 잠자기를 막고 있어요 (caffeinate 등)';
+    items.push({ label: awakeText, enabled: false });
+    items.push({
+      label: '     잠자기 방지',
+      submenu: [
+        { label: 'Claude 세션이 열려 있으면 (원격 작업용)', type: 'radio', checked: settings.keepAwake !== false && settings.keepAwakeMode !== 'working', click: () => { this.onAction('awake-auto', { value: true }); this.onAction('awake-mode', { value: 'open' }); } },
+        { label: 'Claude 가 일할 때만', type: 'radio', checked: settings.keepAwake !== false && settings.keepAwakeMode === 'working', click: () => { this.onAction('awake-auto', { value: true }); this.onAction('awake-mode', { value: 'working' }); } },
+        { label: '자동으로 막지 않기', type: 'radio', checked: settings.keepAwake === false, click: () => this.onAction('awake-auto', { value: false }) },
+      ],
+    });
+    items.push({ label: '     지금부터 계속 깨어 있기', type: 'checkbox', checked: !!settings.keepAwakeManual, click: (i) => this.onAction('awake-manual', { value: i.checked }) });
+    items.push({ label: `     🧳 덮개 닫아도 안 잠들기 (외출용)${aw.lid ? '  · 켜짐' : ''}`, type: 'checkbox', checked: !!aw.lid, click: (i) => this.onAction('awake-lid', { value: i.checked }) });
     items.push({
       label: '🏠  자리 비움 모드 (펫에서 답장)',
       type: 'checkbox',

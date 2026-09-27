@@ -99,6 +99,9 @@
     restoreTerminal: { type: 'select' },
     restoreExtraArgs: { type: 'text' },
     taskModel: { type: 'select' },
+    keepAwake: { type: 'check' },
+    keepAwakeMode: { type: 'select' },
+    keepAwakeManual: { type: 'check' },
   };
 
   function fillForm() {

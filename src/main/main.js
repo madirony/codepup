@@ -13,6 +13,7 @@ const {
   powerMonitor,
   shell,
   globalShortcut,
+  powerSaveBlocker,
 } = require('electron');
 
 const { Store } = require('./store');
@@ -24,6 +25,7 @@ const { Bridge } = require('./bridge');
 const { Skins } = require('./skins');
 const { Runner, isLongContextError } = require('./runner');
 const transcripts = require('./transcripts');
+const { KeepAwake } = require('./keep-awake');
 const terminals = require('./terminals');
 const { IMAGE_SLOTS, SOUND_SLOTS, DEFAULT_SETTINGS } = require('./defaults');
 
@@ -58,6 +60,7 @@ let hub;
 let bridge;
 let skins;
 let runner;
+let awake;
 let promptWin = null;
 let petWin = null;
 let settingsWin = null;
@@ -398,7 +401,10 @@ function sanitizePatch(patch) {
   if (['auto', 'Terminal', 'iTerm'].includes(s.restoreTerminal)) out.restoreTerminal = s.restoreTerminal;
   if (typeof s.restoreExtraArgs === 'string') out.restoreExtraArgs = s.restoreExtraArgs.slice(0, 120);
   if (['', 'sonnet', 'opus', 'haiku', 'fable'].includes(s.taskModel)) out.taskModel = s.taskModel;
+  if (s.keepAwakeMode === 'open' || s.keepAwakeMode === 'working') out.keepAwakeMode = s.keepAwakeMode;
   for (const key of [
+    'keepAwake',
+    'keepAwakeManual',
     'soundEnabled',
     'ambientSounds',
     'bubbles',
@@ -580,6 +586,40 @@ function onLimits({ limits, alert }) {
   }
 }
 
+function evaluateAwake() {
+  if (!awake) return;
+  awake.configure({ auto: store.settings.keepAwake, manual: store.settings.keepAwakeManual, mode: store.settings.keepAwakeMode });
+  awake.evaluate({ sessions: hub.list(), tasks: runner ? runner.running().length : 0 });
+}
+
+async function toggleLid(disable) {
+  if (disable) {
+    const res = await dialog.showMessageBox({
+      type: 'warning',
+      buttons: ['취소', '덮개 닫아도 안 잠들기'],
+      defaultId: 1,
+      cancelId: 0,
+      message: '노트북 덮개를 닫아도 맥이 잠들지 않게 할까요?',
+      detail:
+        '밖에서 원격으로 작업할 때 쓰는 기능이에요. macOS 설정(pmset disablesleep)을 바꾸기 때문에 관리자 암호를 한 번 물어봐요.\n\n' +
+        '⚠️ 가방 속에서도 켜져 있어서 뜨거워지고 배터리가 빨리 닳을 수 있어요. 돌아오면 꼭 다시 꺼 주세요. (메뉴 막대에서 끌 수 있어요)',
+    });
+    if (res.response !== 1) return;
+  }
+  const r = await awake.setLid(disable);
+  if (!r.ok && r.error !== '취소했어요') dialog.showErrorBox('설정하지 못했어요', r.error);
+  if (r.ok) sendCommand('say', { text: disable ? '🧳 덮개를 닫아도 안 잘게요! 다녀오세요~' : '🛏 이제 덮개를 닫으면 잘게요', tex: 'happy' });
+}
+
+function onAwakeChanged(state) {
+  if (tray) tray.update({ awake: state });
+  sendToAll('awake:changed', state);
+  if (state.turnedOn && !state.manual && state.reason) {
+    const text = state.reason.kind === 'open' ? '☕ Claude 세션이 열려 있는 동안 맥이 잠들지 않게 지킬게요!' : '☕ Claude 가 일하는 동안 맥이 잠들지 않게 지킬게요!';
+    sendCommand('say', { text, tex: 'happy' });
+  }
+}
+
 function scanOpenSessions() {
   try {
     for (const t of transcripts.scanActive()) hub.observe(t);
@@ -594,6 +634,7 @@ function onHubChanged({ session, event, counts }) {
   if (tray) tray.update({ sessions: { counts, list: hub.list(), restorable: hub.restorable(10) } });
   if (event.type === 'done') applyAction(() => Pet.taskDone(pet));
   if (event.type === 'started' || event.type === 'ended') persistPet();
+  evaluateAwake();
 }
 
 // ---------- 트레이 · 메뉴 동작 ----------
@@ -631,6 +672,22 @@ function handleMenuAction(name, payload = {}) {
       break;
     case 'open-panel':
       openPanel({ focusSession: payload.sessionId });
+      break;
+    case 'awake-manual':
+      updateSettings({ keepAwakeManual: !!payload.value }); // 앱을 다시 켜도 유지
+      evaluateAwake();
+      sendCommand('say', { text: payload.value ? '☕ 이제 계속 깨어 있을게요!' : '💤 이제 평소처럼 잠들어도 돼요', tex: 'happy' });
+      break;
+    case 'awake-auto':
+      updateSettings({ keepAwake: !!payload.value });
+      evaluateAwake();
+      break;
+    case 'awake-mode':
+      updateSettings({ keepAwakeMode: payload.value });
+      evaluateAwake();
+      break;
+    case 'awake-lid':
+      toggleLid(!!payload.value);
       break;
     case 'open-prompt':
       // 펫 위치를 알아야 해서 펫 창에게 부탁
@@ -691,6 +748,7 @@ function registerIpc() {
     skin: skins.get(store.settings.skin),
     sessions: { list: hub.list(), counts: hub.counts(), restorable: hub.restorable() },
     limits: hub.limits,
+    awake: awake ? awake.state() : null,
     claude: claudeStatus(),
     origin: ORIGIN,
     version: app.getVersion(),
@@ -883,7 +941,10 @@ app.whenReady().then(async () => {
   hub.on('limits', onLimits);
   bridge = new Bridge({ hub, onError: (err) => console.error('[bridge]', err) });
   runner = new Runner();
-  runner.on('started', (t) => sendToAll('task:started', t));
+  runner.on('started', (t) => {
+    sendToAll('task:started', t);
+    evaluateAwake();
+  });
   runner.on('finished', (r) => {
     // 1M 컨텍스트 모델 권한이 없으면 일반 모델로 한 번 더
     const req = r.request || {};
@@ -899,7 +960,10 @@ app.whenReady().then(async () => {
     }
     sendToAll('task:finished', r);
     hub.taskFinished(r);
+    evaluateAwake();
   });
+  awake = new KeepAwake({ blocker: powerSaveBlocker });
+  awake.on('changed', onAwakeChanged);
   try {
     await bridge.start();
   } catch (err) {
@@ -932,6 +996,13 @@ app.whenReady().then(async () => {
   // 이미 열려 있던 세션 찾기 · 신호 끊긴 세션 정리
   setTimeout(scanOpenSessions, 1500);
   setInterval(scanOpenSessions, 15000);
+  // ☕ 잠자기 방지: 유예 시간이 끝났는지 · 다른 앱이 이미 막고 있는지 확인
+  setInterval(evaluateAwake, 30000);
+  setInterval(() => awake.checkExternal(), 60000);
+  setTimeout(() => awake.checkExternal(), 3000);
+  awake.refreshLid();
+  setInterval(() => awake.refreshLid(), 60000);
+  evaluateAwake();
 
   globalShortcut.register(PANEL_SHORTCUT, () => openPanel({ toggle: true }));
   globalShortcut.register(PROMPT_SHORTCUT, () => handleMenuAction('open-prompt'));
@@ -955,6 +1026,7 @@ app.on('before-quit', () => {
   quitting = true;
   if (hub) hub.releaseAll(); // 기다리던 훅은 모두 터미널로 돌려보냄
   if (runner) runner.stopAll();
+  if (awake) awake.stop();
   if (bridge) bridge.stop();
   if (store && pet) {
     pet.lastTick = Date.now();

@@ -263,13 +263,16 @@
 
   const badgeEl = document.getElementById('badge');
   let bubbleNotice = null; // 버튼이 달린 알림 말풍선 { sessionId, kind }
+  let importantUntil = 0; // 한도 알림처럼 중요한 말풍선은 잡담이 덮어쓰지 못하게
 
   // actions 가 있으면 버튼이 달린 알림 말풍선 (Claude 세션 알림)
   function say(text, ms = 2200, force = false, opts = {}) {
     const actions = opts.actions || null;
     if (!settings.bubbles && !force && !actions) return;
-    // 알림 말풍선이 떠 있는 동안에는 잡담으로 덮어쓰지 않음
+    // 알림 말풍선 · 중요한 말풍선이 떠 있는 동안에는 잡담으로 덮어쓰지 않음
     if (bubbleNotice && !actions && now() < bubbleUntil) return;
+    if (!force && !actions && now() < importantUntil) return;
+    if (opts.important) importantUntil = now() + ms;
     const body = document.createElement('div');
     body.className = 'text';
     body.textContent = text;
@@ -719,7 +722,7 @@
         openPrompt(cmd.sessionId);
         break;
       case 'say':
-        say(cmd.text, 2600, true);
+        say(cmd.text, 4500, true, { important: true });
         if (cmd.tex && INTERRUPTIBLE.has(P.state)) setState('greet', { dur: 1.6, tex: cmd.tex });
         play('happy', { interrupt: false });
         break;

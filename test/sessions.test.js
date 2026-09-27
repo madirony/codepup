@@ -378,3 +378,61 @@ test('설치기: 쓰던 상태 표시줄(claude-hud 등)은 이어서 실행하�
     bridge.stop();
   }
 });
+
+const { KeepAwake, awakeReason, GRACE_MS } = require('../src/main/keep-awake');
+
+function fakeBlocker() {
+  const b = { started: new Set(), seq: 0 };
+  b.start = () => {
+    const id = ++b.seq;
+    b.started.add(id);
+    return id;
+  };
+  b.stop = (id) => b.started.delete(id);
+  return b;
+}
+
+test('☕ 세션이 일하는 동안만 잠자기를 막고, 끝나면 유예 뒤 푼다', () => {
+  let t = 1_000_000;
+  const blocker = fakeBlocker();
+  const awake = new KeepAwake({ blocker, now: () => t, detectExternal: false });
+  awake.configure({ mode: 'working' });
+  const changes = [];
+  awake.on('changed', (s) => changes.push(s.active));
+  const working = [{ name: 'api', status: 'working', updatedAt: t }];
+  assert.equal(awake.evaluate({ sessions: [], tasks: 0 }).active, false);
+  assert.equal(awake.evaluate({ sessions: working, tasks: 0 }).active, true);
+  assert.equal(blocker.started.size, 1);
+  // 작업 끝 → 바로 풀지 않고 유예
+  t += 10_000;
+  assert.equal(awake.evaluate({ sessions: [{ name: 'api', status: 'done', updatedAt: t }], tasks: 0 }).active, true);
+  t += GRACE_MS + 1;
+  assert.equal(awake.evaluate({ sessions: [{ name: 'api', status: 'done', updatedAt: t }], tasks: 0 }).active, false);
+  assert.equal(blocker.started.size, 0);
+  assert.deepEqual(changes, [true, false]);
+});
+
+test('☕ 수동 "계속 깨어 있기"와 자동 끄기', () => {
+  const blocker = fakeBlocker();
+  const awake = new KeepAwake({ blocker, detectExternal: false });
+  awake.configure({ manual: true });
+  assert.equal(awake.evaluate({ sessions: [], tasks: 0 }).active, true);
+  awake.configure({ manual: false, auto: false });
+  const now = Date.now();
+  assert.equal(awake.evaluate({ sessions: [{ name: 'a', status: 'working', updatedAt: now }], tasks: 0 }).active, false);
+});
+
+test('☕ 오래 소식이 없는 "작업 중" 세션은 이유로 치지 않는다', () => {
+  const now = 10_000_000;
+  assert.equal(awakeReason({ sessions: [{ name: 'a', status: 'working', updatedAt: now - 30 * 60000 }], now, mode: 'working' }), null);
+  assert.equal(awakeReason({ sessions: [{ name: 'a', status: 'done', pending: { kind: 'permission' }, updatedAt: now }], now }).kind, 'sessions');
+  assert.equal(awakeReason({ sessions: [], tasks: 1, now }).kind, 'task');
+});
+
+test('☕ 원격 작업 모드: 세션이 열려 있기만 해도 깨어 있는다', () => {
+  const now = 10_000_000;
+  const idle = [{ name: 'api', status: 'done', updatedAt: now - 60 * 60000 }];
+  assert.equal(awakeReason({ sessions: idle, now, mode: 'open' }).kind, 'open');
+  assert.equal(awakeReason({ sessions: idle, now, mode: 'working' }), null);
+  assert.equal(awakeReason({ sessions: [], now, mode: 'open' }), null);
+});
