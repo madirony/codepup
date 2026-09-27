@@ -98,6 +98,7 @@
     restoreRemoteControl: { type: 'check' },
     restoreTerminal: { type: 'select' },
     restoreExtraArgs: { type: 'text' },
+    taskModel: { type: 'select' },
   };
 
   function fillForm() {

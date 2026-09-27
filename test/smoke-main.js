@@ -186,6 +186,11 @@ app.whenReady().then(async () => {
   await wait(4000);
   const again = (await run(`window.codepup.sessions()`)).list.find((x) => x.id === (owned && owned.id));
   check('같은 세션으로 이어서 일한다', again && again.lastMessage.includes('테스트도 추가해 줘'), again && again.lastMessage);
+  // 1M 컨텍스트 권한 오류 → 일반 모델로 자동 재시도
+  await pr(`document.querySelector('#target').value = 'new'; document.querySelector('#target').dispatchEvent(new Event('change')); document.querySelector('#text').value = 'LONGCTX 요약해 줘'; document.querySelector('#send').click()`);
+  await wait(6000);
+  const lc = (await run(`window.codepup.sessions()`)).list.find((x) => x.lastMessage.includes('LONGCTX'));
+  check('1M 컨텍스트 권한 오류가 나면 일반 모델로 다시 해서 끝낸다', lc && lc.status === 'done' && lc.lastMessage.startsWith('완료'), lc && lc.lastMessage);
   await run(`window.codepup.updateSettings({ cpuReactive: true })`);
 
   // 8) 기존 상호작용: 연타 → 화남, 던지기 → 어지러움

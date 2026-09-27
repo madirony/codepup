@@ -1,16 +1,24 @@
 #!/bin/sh
 # 테스트용 가짜 claude: 실제 claude -p 처럼 훅을 부르고 JSON 결과를 출력해요.
 # 사용: fake-claude.sh -p "<할 일>" [--output-format json] [--resume <id>] [--fork-session]
-PROMPT=""; RESUME=""; FORK=0
+PROMPT=""; RESUME=""; FORK=0; MODEL=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -p) PROMPT="$2"; shift 2 ;;
     --resume) RESUME="$2"; shift 2 ;;
     --fork-session) FORK=1; shift ;;
+    --model) MODEL="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
 [ "$PROMPT" = "FAIL" ] && { echo "Error: 가짜 실패" >&2; exit 1; }
+# 1M 컨텍스트 모델을 쓸 권한이 없는 계정 흉내: --model sonnet 이 없으면 429
+case "$PROMPT" in LONGCTX*)
+  if [ "$MODEL" != "sonnet" ]; then
+    printf '{"type":"result","subtype":"success","is_error":true,"result":"API Error: Request rejected (429) · Usage credits are required for long context requests.","session_id":"fake-lc-%s"}\n' "$$"
+    exit 1
+  fi ;;
+esac
 SID="${RESUME:-fake-$$}"
 [ "$FORK" = 1 ] && SID="fork-$$"
 HOOK="$HOME/.codepup/codepup-hook.sh"

@@ -22,7 +22,7 @@ const Pet = require('./pet-state');
 const { SessionHub } = require('./sessions');
 const { Bridge } = require('./bridge');
 const { Skins } = require('./skins');
-const { Runner } = require('./runner');
+const { Runner, isLongContextError } = require('./runner');
 const terminals = require('./terminals');
 const { IMAGE_SLOTS, SOUND_SLOTS, DEFAULT_SETTINGS } = require('./defaults');
 
@@ -36,6 +36,7 @@ const SOUND_EXT = ['mp3', 'wav', 'm4a', 'aac', 'ogg'];
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
 const PANEL_SHORTCUT = 'CommandOrControl+Shift+J';
 const PROMPT_SHORTCUT = 'CommandOrControl+Shift+K';
+const FALLBACK_MODEL = 'sonnet'; // 모든 요금제에서 추가 사용량 없이 쓸 수 있는 모델
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -324,7 +325,7 @@ async function sendPrompt({ target, text, cwd }) {
     if (!cwd) return { ok: false, error: '작업할 폴더를 골라 주세요' };
     store.settings.lastTaskCwd = cwd;
     store.saveSoon();
-    return runner.start({ cwd, prompt });
+    return runner.start({ cwd, prompt, model: store.settings.taskModel });
   }
   const r = hub.route(target);
   switch (r.kind) {
@@ -333,9 +334,9 @@ async function sendPrompt({ target, text, cwd }) {
     case 'busy':
       return { ok: false, error: `${r.session.name} 는 지금 일하는 중이에요. 끝나면 다시 말 걸어 주세요!` };
     case 'resume':
-      return runner.start({ cwd: r.session.cwd, prompt, resume: target });
+      return runner.start({ cwd: r.session.cwd, prompt, resume: target, model: store.settings.taskModel });
     case 'fork':
-      return runner.start({ cwd: r.session.cwd, prompt, resume: target, fork: true });
+      return runner.start({ cwd: r.session.cwd, prompt, resume: target, fork: true, model: store.settings.taskModel });
     default:
       return { ok: false, error: '세션을 찾을 수 없어요' };
   }
@@ -395,6 +396,7 @@ function sanitizePatch(patch) {
   if (Number.isFinite(s.replyWaitMin)) out.replyWaitMin = Math.round(Math.min(58, Math.max(1, s.replyWaitMin)));
   if (['auto', 'Terminal', 'iTerm'].includes(s.restoreTerminal)) out.restoreTerminal = s.restoreTerminal;
   if (typeof s.restoreExtraArgs === 'string') out.restoreExtraArgs = s.restoreExtraArgs.slice(0, 120);
+  if (['', 'sonnet', 'opus', 'haiku', 'fable'].includes(s.taskModel)) out.taskModel = s.taskModel;
   for (const key of [
     'soundEnabled',
     'ambientSounds',
@@ -851,6 +853,18 @@ app.whenReady().then(async () => {
   runner = new Runner();
   runner.on('started', (t) => sendToAll('task:started', t));
   runner.on('finished', (r) => {
+    // 1M 컨텍스트 모델 권한이 없으면 일반 모델로 한 번 더
+    const req = r.request || {};
+    if (!r.ok && isLongContextError(r.error) && !req.retried && req.model !== FALLBACK_MODEL) {
+      sendCommand('say', { text: '1M 컨텍스트 모델은 추가 사용량이 필요해서, 일반 모델로 다시 해 볼게요!', tex: 'worry' });
+      runner.start({ ...req, model: FALLBACK_MODEL, retried: true }).then((res) => {
+        if (!res.ok) hub.taskFinished({ ...r, error: res.error });
+      });
+      return;
+    }
+    if (!r.ok && isLongContextError(r.error)) {
+      r = { ...r, error: '이 모델은 추가 사용량(usage credits)이 필요해요. 설정 → Claude Code 에서 펫이 쓸 모델을 바꿔 주세요.' };
+    }
     sendToAll('task:finished', r);
     hub.taskFinished(r);
   });

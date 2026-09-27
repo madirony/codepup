@@ -57,8 +57,9 @@ class Runner extends EventEmitter {
    * @param {string} opts.prompt    시킬 내용
    * @param {string} [opts.resume]  이어서 할 세션 ID
    * @param {boolean} [opts.fork]   원래 세션은 두고 복사본으로 이어서 (터미널에 열린 세션용)
+   * @param {string} [opts.model]   사용할 모델 (비우면 사용자의 Claude Code 기본 모델)
    */
-  async start({ cwd, prompt, resume, fork }) {
+  async start({ cwd, prompt, resume, fork, model, retried = false }) {
     const text = String(prompt || '').trim();
     if (!text) return { ok: false, error: '할 일을 적어 주세요' };
     if (!cwd || !fs.existsSync(cwd)) return { ok: false, error: '작업 폴더를 찾을 수 없어요' };
@@ -69,6 +70,7 @@ class Runner extends EventEmitter {
     const args = ['-p', text, '--output-format', 'json'];
     if (resume) args.push('--resume', resume);
     if (resume && fork) args.push('--fork-session');
+    if (model && /^[\w.[\]-]+$/.test(model)) args.push('--model', model);
     const env = {
       ...process.env,
       CODEPUP_TASK: taskId,
@@ -80,7 +82,8 @@ class Runner extends EventEmitter {
     } catch (err) {
       return { ok: false, error: String(err.message || err) };
     }
-    const task = { taskId, child, cwd, prompt: text, resume: resume || null, fork: !!fork, sessionId: fork ? null : resume || null, startedAt: Date.now() };
+    const task = { taskId, child, cwd, prompt: text, resume: resume || null, fork: !!fork, model: model || '', retried, sessionId: fork ? null : resume || null, startedAt: Date.now() };
+    const request = { cwd, prompt: text, resume: resume || null, fork: !!fork, model: model || '', retried };
     this.tasks.set(taskId, task);
 
     let out = '';
@@ -93,7 +96,7 @@ class Runner extends EventEmitter {
     });
     child.on('error', (e) => {
       this.tasks.delete(taskId);
-      this.emit('finished', { taskId, cwd, ok: false, error: String(e.message || e) });
+      this.emit('finished', { taskId, cwd, request, ok: false, error: String(e.message || e) });
     });
     child.on('close', (code) => {
       this.tasks.delete(taskId);
@@ -107,6 +110,7 @@ class Runner extends EventEmitter {
         this.emit('finished', {
           taskId,
           cwd,
+          request,
           ok: !result.is_error,
           sessionId: result.session_id,
           result: String(result.result || ''),
@@ -114,7 +118,7 @@ class Runner extends EventEmitter {
         });
       } else {
         const msg = (err || out).trim().split('\n').slice(-3).join(' ').slice(0, 300);
-        this.emit('finished', { taskId, cwd, ok: false, error: msg || `claude 가 종료 코드 ${code} 로 끝났어요` });
+        this.emit('finished', { taskId, cwd, request, ok: false, error: msg || `claude 가 종료 코드 ${code} 로 끝났어요` });
       }
     });
     this.emit('started', { taskId, cwd, prompt: text, resume: resume || null, fork: !!fork });
@@ -137,4 +141,9 @@ class Runner extends EventEmitter {
   }
 }
 
-module.exports = { Runner, findClaude, candidatePaths };
+// 1M 컨텍스트 모델을 쓸 권한(usage credits)이 없을 때의 오류
+function isLongContextError(text) {
+  return /long context|1M context|usage credits/i.test(String(text || ''));
+}
+
+module.exports = { Runner, findClaude, candidatePaths, isLongContextError };

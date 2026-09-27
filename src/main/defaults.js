@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS = {
   restoreRemoteControl: true, // 세션 복구 시 --rc (원격 제어) 켜기
   restoreTerminal: 'auto', // 'auto' | 'Terminal' | 'iTerm'
   restoreExtraArgs: '',
+  taskModel: '', // 펫이 직접 실행하는 작업의 모델 ('' = 내 Claude Code 기본 모델)
   customImages: {}, // slotKey -> user-media 파일 이름
   customSounds: {},
 };

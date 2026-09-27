@@ -45,6 +45,8 @@
 
 펫이 실행한 작업의 권한 요청도 말풍선의 [허락]/[거절]로 답해요. 답하지 않으면 거절돼요.
 
+사용할 모델은 설정 → Claude Code → "펫에게 시킨 작업"에서 고를 수 있어요. 기본 모델이 1M 컨텍스트 전용(`sonnet[1m]` 등)이라 "Usage credits are required for long context requests" 오류가 나면, 자동으로 Sonnet 으로 한 번 더 시도해요.
+
 ### 동작 방식과 안전장치
 ```
 Claude Code 세션들 ──(훅: 시작·권한 요청·도구 사용·완료·종료)──▶ ~/.codepup/codepup-hook.sh

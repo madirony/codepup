@@ -186,7 +186,7 @@ test('설치기: 이전 이름(Speaki)으로 설치된 훅도 정리한다', () 
   assert.equal(s.hooks.Stop.length, 1);
 });
 
-const { Runner } = require('../src/main/runner');
+const { Runner, isLongContextError } = require('../src/main/runner');
 const FAKE = path.join(__dirname, 'fixtures', 'fake-claude.sh');
 
 function runOnce(runner, opts) {
@@ -247,4 +247,16 @@ test('허브: 훅 없이 끝난 펫 작업도 완료 알림을 한 번만 보낸
   assert.deepEqual(events.filter((t) => t === 'done'), ['done']);
   assert.equal(hub.list()[0].owned, true);
   assert.equal(hub.list()[0].lastMessage, '다 했어요');
+});
+
+test('러너: 1M 컨텍스트 권한 오류를 알아보고, 모델을 지정하면 성공한다', async () => {
+  const runner = new Runner({ claudePath: FAKE });
+  const bad = await runOnce(runner, { cwd: os.tmpdir(), prompt: 'LONGCTX 정리' });
+  assert.equal(bad.ok, false);
+  assert.ok(isLongContextError(bad.error), bad.error);
+  assert.equal(bad.request.model, '');
+  const good = await runOnce(runner, { cwd: os.tmpdir(), prompt: 'LONGCTX 정리', model: 'sonnet', retried: true });
+  assert.equal(good.ok, true);
+  assert.equal(isLongContextError('API Error: Usage credits required for 1M context'), true);
+  assert.equal(isLongContextError('rate limited'), false);
 });
