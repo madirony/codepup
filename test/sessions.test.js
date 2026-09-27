@@ -369,7 +369,7 @@ test('설치기: 쓰던 상태 표시줄(claude-hud 등)은 이어서 실행하�
       const child = execFile('sh', ['-c', s.statusLine.command], { env: { ...process.env, HOME: home } }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
       child.stdin.end(JSON.stringify(statusPayload()));
     });
-    assert.match(out, /^\[HUD\] \d+/);
+    assert.match(out, /^\[HUD\] +\d+/); // macOS 의 wc 는 숫자 앞에 공백을 붙임
     for (let i = 0; i < 40 && !hub.list().length; i++) await new Promise((r) => setTimeout(r, 50));
     assert.equal(hub.list()[0].id, 'open-1');
     bridge.uninstall();
