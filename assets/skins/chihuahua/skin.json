@@ -1,0 +1,49 @@
+{
+  "name": "블랙탄 치와와",
+  "description": "기본 스킨 · 옹알이 목소리",
+  "defaultName": "초코",
+  "catchphrase": "멍멍",
+  "phrases": [
+    "멍!",
+    "오늘도 코딩 화이팅!",
+    "같이 놀아요~",
+    "헤헤",
+    "간식 주세요!",
+    "꼬리 흔들흔들~"
+  ],
+  "voice": {
+    "type": "babble",
+    "pitch": 1.35
+  },
+  "images": {
+    "default": "default.png",
+    "happy": "happy.png",
+    "eat": "eat.png",
+    "eat2": "eat2.png",
+    "sleep": "sleep.png",
+    "hungry": "hungry.png",
+    "tired": "tired.png",
+    "carry": "carry.png",
+    "run": "run.png",
+    "dizzy": "dizzy.png",
+    "sing": "sing.png",
+    "annoyed": "annoyed.png",
+    "levelup": "levelup.png",
+    "food": "food.png",
+    "alert": "alert.png",
+    "worry": "worry.png",
+    "surprised": "surprised.png",
+    "drool": "drool.png",
+    "cry": "cry.png",
+    "sneeze": "sneeze.png",
+    "sad": "sad.png"
+  },
+  "expressions": [
+    "happy",
+    "surprised",
+    "drool",
+    "sing",
+    "alert"
+  ],
+  "sounds": {}
+}

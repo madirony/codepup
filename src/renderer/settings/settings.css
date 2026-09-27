@@ -1,0 +1,386 @@
+:root {
+  --pink: #d14d72;
+  --pink-deep: #a83d5a;
+  --pink-soft: #fff0f3;
+  --line: #f3c6d4;
+  --bg: #fff5f7;
+  --card: #ffffff;
+  --text: #4a2a35;
+  --muted: #9a7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pink: #ff8fb1;
+    --pink-deep: #ffb3c9;
+    --pink-soft: #3a2630;
+    --line: #5a3a47;
+    --bg: #211419;
+    --card: #2c1b22;
+    --text: #f6e6ec;
+    --muted: #c49aab;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px 8px;
+}
+
+header img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--pink);
+}
+
+h3 {
+  margin: 4px 0 10px;
+  font-size: 15px;
+  color: var(--pink-deep);
+}
+
+header p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+nav {
+  display: flex;
+  gap: 6px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 2;
+  overflow-x: auto;
+}
+
+nav button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+nav button.active {
+  background: var(--pink);
+  color: #fff;
+}
+
+main {
+  padding: 16px 18px 28px;
+}
+
+.tab {
+  display: none;
+}
+
+.tab.active {
+  display: block;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: 84px 1fr 86px;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  font-weight: 700;
+}
+
+#live-stats .meter {
+  grid-template-columns: 84px 1fr 170px;
+}
+
+.meter b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--pink-soft);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.fill.exp { background: linear-gradient(90deg, #ffd36e, #ffb13b); }
+.fill.hunger { background: linear-gradient(90deg, #ffb07a, #ff8a4c); }
+.fill.happy { background: linear-gradient(90deg, #ff9ec0, #ff5d95); }
+.fill.energy { background: linear-gradient(90deg, #9fd8ff, #5aa9ff); }
+.fill.sys { background: linear-gradient(90deg, #b9a4ff, #8a6cff); }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+button {
+  font: inherit;
+}
+
+.actions button,
+.slot button {
+  border: 1px solid var(--pink);
+  background: var(--pink-soft);
+  color: var(--pink);
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.actions button:hover,
+.slot button:hover {
+  background: var(--pink);
+  color: #fff;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+button.danger {
+  border-color: #d9534f;
+  color: #d9534f;
+  background: transparent;
+}
+
+.howto {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.howto li {
+  margin: 3px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-weight: 600;
+}
+
+.row input[type='range'] {
+  flex: 1;
+  accent-color: var(--pink);
+}
+
+.row input[type='text'],
+.row input[type='number'],
+.row select,
+textarea {
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: var(--card);
+  color: var(--text);
+}
+
+.row input[type='text'] {
+  flex: 1;
+}
+
+.row input[type='number'] {
+  width: 70px;
+}
+
+.row.check {
+  font-weight: 600;
+}
+
+.row.check input {
+  accent-color: var(--pink);
+  width: 16px;
+  height: 16px;
+}
+
+output {
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+
+.slot {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.slot img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 6px;
+}
+
+.slot .btns {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.slot button {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+
+.slot.custom {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 2px var(--pink-soft);
+}
+
+.list .slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.list .slot .btns {
+  margin: 0;
+}
+
+.badge {
+  font-size: 10px;
+  color: #fff;
+  background: var(--pink);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 6px;
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(40, 20, 30, 0.9);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.row.between {
+  justify-content: space-between;
+}
+
+.status {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.status.on {
+  background: #e3f7ec;
+  color: #1f8a55;
+}
+
+.status.off {
+  background: var(--pink-soft);
+  color: var(--muted);
+}
+
+code {
+  font-family: Menlo, ui-monospace, monospace;
+  font-size: 12px;
+  background: var(--pink-soft);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.badge.soft {
+  background: var(--line);
+  color: var(--text);
+}
+
+.slot.skin .muted {
+  font-weight: 500;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.hidden {
+  display: none !important;
+}

@@ -1,0 +1,167 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+}
+
+canvas {
+  position: absolute;
+  inset: 0;
+}
+
+#fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.particle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  line-height: 1;
+  will-change: transform, opacity;
+}
+
+#bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  pointer-events: none;
+  max-width: 220px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  background: #fff;
+  color: #b8426a;
+  border: 2px solid #f3a6bf;
+  box-shadow: 0 3px 10px rgba(209, 77, 114, 0.25);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: pre-line;
+  transition: opacity 0.18s ease;
+}
+
+#bubble.interactive {
+  pointer-events: auto;
+  max-width: 280px;
+  border-color: #ee6653;
+  box-shadow: 0 4px 16px rgba(238, 102, 83, 0.35);
+}
+
+#bubble .text {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#bubble .actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+#bubble button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid #f3a6bf;
+  background: #fff0f3;
+  color: #b8426a;
+  cursor: pointer;
+}
+
+#bubble button.ok {
+  background: #2fa36b;
+  border-color: #2fa36b;
+  color: #fff;
+}
+
+#bubble button.ghost {
+  background: transparent;
+}
+
+#bubble button:hover {
+  filter: brightness(0.95);
+}
+
+#badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ee4b3b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 22px;
+  text-align: center;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: badge-pop 1.2s ease-in-out infinite;
+}
+
+@keyframes badge-pop {
+  50% {
+    scale: 1.15;
+  }
+}
+
+#bubble::after {
+  content: '';
+  position: absolute;
+  left: var(--tail, 50%);
+  bottom: -8px;
+  width: 10px;
+  height: 10px;
+  margin-left: -6px;
+  background: #fff;
+  border-right: 2px solid #f3a6bf;
+  border-bottom: 2px solid #f3a6bf;
+  transform: rotate(45deg);
+}
+
+#tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  pointer-events: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(40, 20, 30, 0.78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: opacity 0.15s ease;
+}
+
+.hidden {
+  opacity: 0;
+}
+
+#badge.hidden,
+#bubble.hidden {
+  pointer-events: none;
+}
+
+#badge.hidden {
+  display: none;
+}

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <!-- PixiJS v7은 셰이더 코드 생성에 new Function 을 쓰므로 unsafe-eval 이 필요합니다 (로컬 파일만 로드). -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' data: blob:; worker-src 'self' blob:">
+  <title>CodePup</title>
+  <link rel="stylesheet" href="pet.css">
+</head>
+<body>
+  <div id="fx"></div>
+  <div id="bubble" class="hidden"></div>
+  <div id="tag" class="hidden"></div>
+  <div id="badge" class="hidden" title="기다리는 Claude 세션 · 클릭하면 세션 보드">0</div>
+  <script src="../../../node_modules/pixi.js/dist/pixi.min.js"></script>
+  <script src="voice.js"></script>
+  <script src="pet.js"></script>
+</body>
+</html>

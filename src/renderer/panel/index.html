@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>세션 보드</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <img id="avatar" alt="">
+      <div class="title">
+        <h1>세션 보드</h1>
+        <p id="summary">세션을 기다리는 중…</p>
+      </div>
+      <label class="away" title="작업이 끝나면 터미널 대신 여기서 다음 지시를 보낼 수 있어요">
+        <input id="away" type="checkbox"><span>자리 비움</span>
+      </label>
+      <button id="close" class="icon" title="닫기 (⌘⇧J)">✕</button>
+    </header>
+
+    <div id="connect" class="banner hidden">
+      <b>Claude Code 와 아직 연결되지 않았어요.</b>
+      <span>연결하면 세션이 끝나거나 허락이 필요할 때 알려 드려요.</span>
+      <button id="connect-btn" class="primary">연결하기</button>
+    </div>
+
+    <main id="list"></main>
+
+    <section id="restore-box" class="hidden">
+      <div class="section-head">
+        <h2>🔁 닫힌 세션</h2>
+        <button id="restore-all" class="ghost">전부 다시 열기</button>
+      </div>
+      <p class="muted" id="restore-hint"></p>
+      <div id="restore-list"></div>
+    </section>
+  </div>
+  <div id="toast" class="hidden"></div>
+  <script src="panel.js"></script>
+</body>
+</html>

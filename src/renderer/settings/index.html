@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
+  <title>CodePup 설정</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <header>
+    <img id="hero-img" alt="">
+    <div>
+      <h1 id="hero-name">초코</h1>
+      <p id="hero-sub">Lv.1</p>
+    </div>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="status" class="active">🐶 펫</button>
+    <button data-tab="claude">🤖 Claude Code</button>
+    <button data-tab="general">⚙️ 일반</button>
+    <button data-tab="menubar">📊 메뉴 막대</button>
+    <button data-tab="custom">🎨 커스텀</button>
+    <button data-tab="about">ℹ️ 정보</button>
+  </nav>
+
+  <main>
+    <!-- 상태 -->
+    <section id="tab-status" class="tab active">
+      <div class="card">
+        <div class="meter"><span>⭐ 경험치</span><div class="track"><div id="m-exp" class="fill exp"></div></div><b id="v-exp"></b></div>
+        <div class="meter"><span>🍚 포만감</span><div class="track"><div id="m-hunger" class="fill hunger"></div></div><b id="v-hunger"></b></div>
+        <div class="meter"><span>💖 기분</span><div class="track"><div id="m-happiness" class="fill happy"></div></div><b id="v-happiness"></b></div>
+        <div class="meter"><span>⚡ 에너지</span><div class="track"><div id="m-energy" class="fill energy"></div></div><b id="v-energy"></b></div>
+        <p id="status-line" class="muted"></p>
+      </div>
+      <div class="actions">
+        <button data-action="feed">🍖 밥 주기</button>
+        <button data-action="pet">🤚 쓰다듬기</button>
+        <button data-action="sleep" id="btn-sleep">💤 재우기</button>
+        <button data-action="sing">🎵 노래</button>
+      </div>
+      <div class="card">
+        <h3>이렇게 놀아 주세요</h3>
+        <ul class="howto">
+          <li><b>Claude 세션이 끝나면</b> — 달려와서 "작업 끝!" 알림 (말풍선 버튼으로 보드·터미널 이동)</li>
+          <li><b>허락이 필요하면</b> — 말풍선에서 바로 [허락] [거절]</li>
+          <li><b>빨간 배지</b> — 기다리는 세션 수 · 누르면 세션 보드</li>
+          <li><b>클릭</b> — 쓰다듬기 (너무 마구 누르면 화내요)</li>
+          <li><b>드래그 · 휙 던지기</b> — 들어서 옮기기 · 날아가서 어지러워해요</li>
+          <li><b>오른쪽 클릭</b> — 세션 보드 · 자리 비움 · 밥 · 잠 메뉴</li>
+          <li><b>CPU가 바쁘면</b> — 화면을 전력 질주! (달린 만큼 경험치)</li>
+        </ul>
+      </div>
+    </section>
+
+
+    <!-- Claude Code -->
+    <section id="tab-claude" class="tab">
+      <div class="card">
+        <div class="row between">
+          <h3>Claude Code 연결</h3>
+          <span id="cc-status" class="status off">⚪ 연결 안 됨</span>
+        </div>
+        <p class="muted">연결하면 <code id="cc-path"></code> 에 알림용 훅을 추가해요. 기존 설정은 그대로 두고 백업을 남겨요. 이미 열려 있던 세션은 다시 시작해야 적용돼요.</p>
+        <div class="actions">
+          <button id="cc-connect">🔌 연결하기</button>
+          <button id="cc-disconnect" class="ghost hidden">연결 해제</button>
+          <button id="cc-panel" class="ghost">🗂 세션 보드 열기 (<span id="shortcut"></span>)</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>알림 · 응답</h3>
+        <label class="row check"><input id="s-awayMode" type="checkbox"> 🏠 자리 비움 모드 — 작업이 끝나면 펫에서 다음 지시를 기다려요</label>
+        <p class="muted">켜 두면 세션이 끝났을 때 터미널 대신 세션 보드에서 바로 다음 지시를 보낼 수 있어요. 기다리는 동안 그 터미널은 입력을 받지 않으니, 자리로 돌아오면 끄거나 [터미널에서 할게요]를 눌러 주세요.</p>
+        <label class="row">허락 요청 대기 <input id="s-permissionWaitSec" type="number" min="10" max="600"> 초 (지나면 터미널 창에서 물어봐요)</label>
+        <label class="row">자리 비움 대기 <input id="s-replyWaitMin" type="number" min="1" max="58"> 분</label>
+      </div>
+      <div class="card">
+        <h3>🔁 닫힌 세션 다시 열기</h3>
+        <p class="muted">메뉴 막대나 세션 보드에서 닫힌 세션을 새 터미널 창으로 한 번에 다시 열어요. (claude --resume)</p>
+        <label class="row check"><input id="s-restoreRemoteControl" type="checkbox"> 원격 제어(--rc)를 켠 채로 열기</label>
+        <div class="row">터미널
+          <select id="s-restoreTerminal">
+            <option value="auto">원래 쓰던 터미널 (Terminal / iTerm)</option>
+            <option value="Terminal">항상 macOS 터미널</option>
+            <option value="iTerm">항상 iTerm2</option>
+          </select>
+        </div>
+        <label class="row">추가 옵션 <input id="s-restoreExtraArgs" type="text" placeholder="예: --model opus"></label>
+      </div>
+    </section>
+
+    <!-- 일반 -->
+    <section id="tab-general" class="tab">
+      <div class="card">
+        <label class="row">이름 <input id="s-name" type="text" maxlength="20"></label>
+        <label class="row">크기 <input id="s-size" type="range" min="40" max="160" step="5"><output id="o-size"></output></label>
+        <label class="row">속도 <input id="s-speed" type="range" min="0.3" max="3" step="0.1"><output id="o-speed"></output></label>
+        <div class="row">움직임
+          <select id="s-moveMode">
+            <option value="free">화면 전체를 돌아다니기</option>
+            <option value="ground">화면 아래쪽에서만 놀기</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <label class="row check"><input id="s-cpuReactive" type="checkbox"> CPU 사용률에 따라 빨라지기</label>
+        <label class="row">전력 질주 시작 CPU <input id="s-sprintThreshold" type="range" min="20" max="100" step="5"><output id="o-sprintThreshold"></output></label>
+        <label class="row check"><input id="s-idleSleep" type="checkbox"> 컴퓨터를 안 쓰면 낮잠 자기</label>
+        <label class="row">낮잠까지 <input id="s-idleSleepMinutes" type="number" min="1" max="120"> 분</label>
+      </div>
+      <div class="card">
+        <label class="row check"><input id="s-soundEnabled" type="checkbox"> 소리 켜기</label>
+        <label class="row">볼륨 <input id="s-volume" type="range" min="0" max="1" step="0.05"><output id="o-volume"></output></label>
+        <label class="row check"><input id="s-ambientSounds" type="checkbox"> 혼잣말 · 노래 소리 (스스로 내는 소리)</label>
+        <label class="row check"><input id="s-bubbles" type="checkbox"> 말풍선 보이기</label>
+        <label class="col">혼잣말 대사 (한 줄에 하나)
+          <textarea id="s-phrases" rows="5"></textarea>
+        </label>
+      </div>
+      <div class="card">
+        <label class="row check"><input id="s-showOnFullscreen" type="checkbox"> 전체 화면 앱 위에서도 보이기</label>
+        <label class="row check"><input id="s-launchAtLogin" type="checkbox"> 로그인할 때 자동 실행</label>
+        <label class="row check"><input id="s-hidden" type="checkbox"> 펫 숨기기 (메뉴 막대만 사용)</label>
+      </div>
+    </section>
+
+    <!-- 메뉴 막대 -->
+    <section id="tab-menubar" class="tab">
+      <div class="card">
+        <p class="muted">RunCat처럼 메뉴 막대 아이콘의 펫이 CPU 사용률에 맞춰 달려요. 옆에 표시할 항목을 고르세요.</p>
+        <label class="row check"><input data-tray="cpu" type="checkbox"> CPU</label>
+        <label class="row check"><input data-tray="mem" type="checkbox"> 메모리</label>
+        <label class="row check"><input data-tray="disk" type="checkbox"> 저장공간</label>
+        <label class="row check"><input data-tray="battery" type="checkbox"> 배터리</label>
+        <label class="row check"><input data-tray="animate" type="checkbox"> 아이콘 달리기 애니메이션</label>
+      </div>
+      <div class="card" id="live-stats"></div>
+    </section>
+
+    <!-- 커스텀 -->
+    <section id="tab-custom" class="tab">
+      <h3>스킨</h3>
+      <p class="muted">표정 · 소리를 한 번에 바꾸는 캐릭터 팩이에요. <b>skin.json</b> 이나 <b>default.png</b> 가 들어 있는 폴더를 불러올 수 있어요.</p>
+      <div id="skin-list" class="grid"></div>
+      <div class="actions"><button id="import-skin">📁 스킨 폴더 불러오기</button></div>
+      <h3>표정 하나씩 바꾸기</h3>
+      <p class="muted"><b>기본</b> 이미지만 바꿔도 나머지 표정이 모두 그 이미지로 바뀌어요. 배경이 투명한 PNG를 추천해요.</p>
+      <div id="image-slots" class="grid"></div>
+      <h3>소리</h3>
+      <div id="sound-slots" class="list"></div>
+      <div class="actions">
+        <button id="reset-images" class="ghost">이미지 전부 기본으로</button>
+        <button id="reset-sounds" class="ghost">소리 전부 기본으로</button>
+      </div>
+    </section>
+
+    <!-- 정보 -->
+    <section id="tab-about" class="tab">
+      <div class="card">
+        <h3>CodePup <span id="version"></span></h3>
+        <p>여러 Claude Code 세션을 대신 지켜보다가, 끝나거나 허락이 필요하면 달려와서 알려 주는 데스크톱 펫이에요. 메뉴 막대에서는 CPU · 메모리 · 저장공간 · 배터리도 보여 줘요.</p>
+        <p class="muted">기본 캐릭터 '블랙탄 치와와'는 이 앱을 위해 새로 그린 오리지널 캐릭터예요. 스킨 폴더를 불러와 원하는 캐릭터로 바꿀 수 있어요.</p>
+        <p id="born" class="muted"></p>
+      </div>
+      <div class="actions">
+        <button id="open-data" class="ghost">데이터 폴더 열기</button>
+        <button id="reset-pet" class="danger">처음부터 다시 키우기</button>
+      </div>
+    </section>
+  </main>
+  <script src="../pet/voice.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

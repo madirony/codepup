@@ -1,0 +1,72 @@
+name: Build & Release (macOS dmg)
+
+# - push / PR: 테스트 + dmg 빌드 → Actions 아티팩트로 업로드
+# - v* 태그 push (예: v2.1.0): 위 과정 + GitHub Release 를 만들고 dmg 첨부
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version --no-git-tag-version "${GITHUB_REF_NAME#v}" --allow-same-version
+
+      - name: Build dmg (Apple Silicon + Intel)
+        run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify ad-hoc signature
+        run: |
+          for app in dist/mac*/CodePup.app; do
+            echo "== $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CodePup-dmg
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
+          body: |
+            ## 설치
+            1. Apple Silicon(M1~M4) 맥은 `arm64`, 인텔 맥은 `x64` dmg를 받으세요.
+            2. dmg를 열고 **CodePup** 을 Applications 폴더로 드래그하세요.
+            3. 처음 실행이 막히면 터미널에서 한 번만 실행하세요:
+               ```
+               xattr -cr /Applications/CodePup.app
+               ```
+            4. 메뉴 막대에 강아지 아이콘이 생기면 [Claude Code 연결]을 눌러 주세요.
