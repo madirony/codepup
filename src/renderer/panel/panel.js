@@ -74,7 +74,7 @@
     c.dataset.id = s.id;
 
     const top = el('div', 'row');
-    top.append(el('span', `chip ${cls}`, label), el('span', 'name', s.name), el('span', 'ago', ago(s.updatedAt)));
+    top.append(el('span', `chip ${cls}`, label), el('span', 'name', `${s.owned ? '🐶 ' : ''}${s.name}`), el('span', 'ago', ago(s.updatedAt)));
     c.append(top, el('div', 'cwd', shortPath(s.cwd)));
     if (s.activity && !s.pending) c.append(el('div', 'activity', s.activity));
 
@@ -119,7 +119,8 @@
 
     // 하단: 터미널 이동 · 결과 공유
     const foot = el('div', 'btns footer');
-    foot.append(button('터미널로 이동', 'ghost', () => focus(s.id)));
+    foot.append(button('💬 말 걸기', '', () => api.openPrompt({ sessionId: s.id })));
+    if (!s.owned) foot.append(button('터미널로 이동', 'ghost', () => focus(s.id)));
     const others = sessions.filter((o) => o.id !== s.id);
     if (s.lastMessage && others.length) {
       const sel = el('select');

@@ -364,8 +364,28 @@
   }
 
   const clickTimes = [];
+  let lastClickAt = 0;
+  function openPrompt(sessionId) {
+    api.openPrompt({ x: P.x, y: headY(), sessionId: sessionId || null });
+  }
+  let promptTimer = null;
   function onPetClick() {
     const t = now();
+    // 더블클릭 → 말 걸기. 단, 곧바로 세 번째 클릭이 오면 연타로 보고 취소
+    if (promptTimer) {
+      clearTimeout(promptTimer);
+      promptTimer = null;
+    } else if (t - lastClickAt < 380 && P.state !== 'sleep') {
+      promptTimer = setTimeout(() => {
+        promptTimer = null;
+        clickTimes.length = 0;
+        setState('greet', { dur: 1.2, tex: 'surprised' });
+        say('네! 무엇을 할까요?', 1600);
+        play('happy', { interrupt: false });
+        openPrompt();
+      }, 400);
+    }
+    lastClickAt = t;
     clickTimes.push(t);
     while (clickTimes.length && t - clickTimes[0] > 2500) clickTimes.shift();
     if (clickTimes.length >= 6) {
@@ -695,6 +715,9 @@
       case 'sing':
         if (!PHYSICS.has(P.state) && P.state !== 'sleep') startSing();
         break;
+      case 'open-prompt':
+        openPrompt(cmd.sessionId);
+        break;
       case 'say':
         say(cmd.text, 2600, true);
         if (cmd.tex && INTERRUPTIBLE.has(P.state)) setState('greet', { dur: 1.6, tex: cmd.tex });
@@ -786,12 +809,12 @@
         const msg = event.message ? `\n${clipText(event.message, 70)}` : '';
         const actions = event.awaitingReply
           ? [
-              { label: '답장하기', cls: 'ok', fn: () => api.menuAction('open-panel', { sessionId: id }) },
+              { label: '답장', cls: 'ok', fn: () => openPrompt(id) },
               { label: '터미널에서', fn: () => api.release(id) },
             ]
           : [
-              { label: '보드', cls: 'ok', fn: () => api.menuAction('open-panel', { sessionId: id }) },
-              { label: '터미널', fn: () => api.focusSession(id) },
+              { label: '답장', cls: 'ok', fn: () => openPrompt(id) },
+              { label: session.owned ? '보드' : '터미널', fn: () => (session.owned ? api.menuAction('open-panel', { sessionId: id }) : api.focusSession(id)) },
             ];
         say(`✅ ${session.name} 작업 끝!${msg}`, event.awaitingReply ? (settings.replyWaitMin || 30) * 60000 : 15000, true, {
           sessionId: id,
@@ -815,12 +838,28 @@
       case 'started':
         if (!bubbleNotice) say(`🐾 ${session.name} 세션을 지켜볼게요!`, 1800);
         break;
+      case 'task-failed':
+        noticeAnim('sad', ['💦']);
+        say(`😢 ${session.name}: ${clipText(event.error || '실패했어요', 90)}`, 12000, true, {
+          sessionId: id,
+          kind: 'failed',
+          actions: [{ label: '다시 말 걸기', cls: 'ok', fn: () => openPrompt() }],
+        });
+        break;
       case 'shared':
         say(`📎 ${event.fromName} 결과를 ${session.name}에 전해 줄게요`, 2600, true);
         break;
       default:
         break;
     }
+  });
+
+  api.onTaskStarted((t) => {
+    const folder = String(t.cwd || '').split('/').filter(Boolean).pop() || '폴더';
+    if (INTERRUPTIBLE.has(P.state)) setState('greet', { dur: 1.6, tex: 'happy' });
+    burst(['🐾', '✨'], 3);
+    say(t.resume ? `${folder} 이어서 할게요! 🐾` : `${folder}에서 시작할게요! 🐾`, 2400, true);
+    play('happy', { interrupt: false });
   });
 
   api.onSkins(async (p) => {

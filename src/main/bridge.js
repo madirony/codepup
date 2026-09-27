@@ -51,6 +51,7 @@ OUT=$(curl -s --max-time "$MAXT" -X POST \\
   -H "Content-Type: application/json" \\
   -H "X-CodePup-TTY: $TTY" \\
   -H "X-CodePup-Term: \${TERM_PROGRAM:-}" \\
+  -H "X-CodePup-Task: \${CODEPUP_TASK:-}" \\
   --data-binary @- "http://127.0.0.1:$CODEPUP_PORT/hook/$EVENT" 2>/dev/null)
 [ -n "$OUT" ] && printf '%s' "$OUT"
 exit 0
@@ -132,6 +133,7 @@ class Bridge {
         const out = await this.hub.handle(m[1], payload, {
           tty: String(req.headers['x-codepup-tty'] || '').slice(0, 40),
           term: String(req.headers['x-codepup-term'] || '').slice(0, 40),
+          task: String(req.headers['x-codepup-task'] || '').replace(/[^\w-]/g, '').slice(0, 40),
           signal: ac.signal,
         });
         if (!res.writableEnded && !res.destroyed) send(200, out);

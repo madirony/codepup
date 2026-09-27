@@ -163,7 +163,8 @@ class PetTray {
     const list = (sessions && sessions.list) || [];
     const restorable = (sessions && sessions.restorable) || [];
     const icon = (s) =>
-      s.pending && s.pending.kind === 'permission' ? '🔔' : s.pending && s.pending.kind === 'reply' ? '💬' : s.status === 'working' ? '⚙️' : s.status === 'done' ? '✅' : '💤';
+      s.pending && s.pending.kind === 'permission' ? '🔔' : s.pending && s.pending.kind === 'reply' ? '💬' : s.status === 'working' ? (s.owned ? '🐶' : '⚙️') : s.status === 'done' ? '✅' : '💤';
+    items.push({ label: '💬  말 걸기 (일 시키기)…', click: act('open-prompt'), accelerator: 'CommandOrControl+Shift+K' });
     items.push({ label: `🗂  세션 보드 열기${list.length ? `  (${list.length})` : ''}`, click: act('open-panel'), accelerator: 'CommandOrControl+Shift+J' });
     for (const s of list.slice(0, 8)) {
       items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}`.slice(0, 70), click: act('open-panel', { sessionId: s.id }) });

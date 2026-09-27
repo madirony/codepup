@@ -22,6 +22,7 @@ const Pet = require('./pet-state');
 const { SessionHub } = require('./sessions');
 const { Bridge } = require('./bridge');
 const { Skins } = require('./skins');
+const { Runner } = require('./runner');
 const terminals = require('./terminals');
 const { IMAGE_SLOTS, SOUND_SLOTS, DEFAULT_SETTINGS } = require('./defaults');
 
@@ -34,6 +35,7 @@ const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 const SOUND_EXT = ['mp3', 'wav', 'm4a', 'aac', 'ogg'];
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
 const PANEL_SHORTCUT = 'CommandOrControl+Shift+J';
+const PROMPT_SHORTCUT = 'CommandOrControl+Shift+K';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -53,6 +55,8 @@ let tray;
 let hub;
 let bridge;
 let skins;
+let runner;
+let promptWin = null;
 let petWin = null;
 let settingsWin = null;
 let panelWin = null;
@@ -64,7 +68,7 @@ let quitting = false;
 // ---------- 공용 ----------
 
 function windows() {
-  return [petWin, settingsWin, panelWin].filter((w) => w && !w.isDestroyed());
+  return [petWin, settingsWin, panelWin, promptWin].filter((w) => w && !w.isDestroyed());
 }
 
 function sendToAll(channel, payload) {
@@ -237,6 +241,113 @@ function openPanel({ focusSession, toggle } = {}) {
   panelWin.on('closed', () => {
     panelWin = null;
   });
+}
+
+// 펫에게 말 걸기: 펫 머리 위에 뜨는 작은 입력창
+function openPrompt({ x, y, sessionId } = {}) {
+  const pb = petWin && !petWin.isDestroyed() ? petWin.getBounds() : overlayBounds();
+  const wa = overlayBounds();
+  const w = 380;
+  const h = 250;
+  const sx = Math.round(Math.min(wa.x + wa.width - w - 8, Math.max(wa.x + 8, pb.x + (Number.isFinite(x) ? x : wa.width / 2) - w / 2)));
+  let sy = Math.round(pb.y + (Number.isFinite(y) ? y : wa.height / 2) - h - 90);
+  if (sy < wa.y + 8) sy = Math.round(pb.y + (Number.isFinite(y) ? y : 0) + 20);
+  sy = Math.min(sy, wa.y + wa.height - h - 8);
+  const hash = sessionId ? '#' + encodeURIComponent(sessionId) : '';
+  if (promptWin && !promptWin.isDestroyed()) {
+    promptWin.setBounds({ x: sx, y: sy, width: w, height: h });
+    promptWin.webContents.send('prompt:target', sessionId || null);
+    promptWin.show();
+    promptWin.focus();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+    return;
+  }
+  promptWin = new BrowserWindow({
+    x: sx,
+    y: sy,
+    width: w,
+    height: h,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true },
+  });
+  promptWin.setAlwaysOnTop(true, 'floating');
+  promptWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  promptWin.loadURL(`${ORIGIN}/src/renderer/prompt/index.html${hash}`);
+  promptWin.once('ready-to-show', () => {
+    promptWin.show();
+    promptWin.focus();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+  });
+  promptWin.on('blur', () => {
+    if (promptWin && !promptWin.isDestroyed() && !promptWin.webContents.isDevToolsOpened()) promptWin.hide();
+  });
+  promptWin.on('closed', () => {
+    promptWin = null;
+  });
+}
+
+function recentFolders() {
+  const seen = new Set();
+  const out = [];
+  const add = (p) => {
+    if (p && !seen.has(p) && fs.existsSync(p)) {
+      seen.add(p);
+      out.push(p);
+    }
+  };
+  add(store.settings.lastTaskCwd);
+  for (const s of hub.list()) add(s.cwd);
+  for (const h of hub.history) add(h.cwd);
+  return out.slice(0, 12);
+}
+
+function promptContext() {
+  return {
+    sessions: hub.list().map((s) => ({ ...s, route: hub.route(s.id).kind })),
+    recent: hub.restorable(8).map((h) => ({ ...h, route: 'resume' })),
+    folders: recentFolders(),
+    home: app.getPath('home'),
+  };
+}
+
+async function sendPrompt({ target, text, cwd }) {
+  const prompt = String(text || '').trim();
+  if (!prompt) return { ok: false, error: '할 일을 적어 주세요' };
+  if (!target || target === 'new') {
+    if (!cwd) return { ok: false, error: '작업할 폴더를 골라 주세요' };
+    store.settings.lastTaskCwd = cwd;
+    store.saveSoon();
+    return runner.start({ cwd, prompt });
+  }
+  const r = hub.route(target);
+  switch (r.kind) {
+    case 'reply':
+      return hub.reply(target, prompt) ? { ok: true, delivered: 'reply' } : { ok: false, error: '전달하지 못했어요' };
+    case 'busy':
+      return { ok: false, error: `${r.session.name} 는 지금 일하는 중이에요. 끝나면 다시 말 걸어 주세요!` };
+    case 'resume':
+      return runner.start({ cwd: r.session.cwd, prompt, resume: target });
+    case 'fork':
+      return runner.start({ cwd: r.session.cwd, prompt, resume: target, fork: true });
+    default:
+      return { ok: false, error: '세션을 찾을 수 없어요' };
+  }
+}
+
+async function pickFolder() {
+  const res = await dialog.showOpenDialog(promptWin || undefined, {
+    title: '작업할 폴더 선택',
+    defaultPath: store.settings.lastTaskCwd || app.getPath('home'),
+    properties: ['openDirectory'],
+  });
+  return res.canceled ? null : res.filePaths[0];
 }
 
 // ---------- 설정 ----------
@@ -489,6 +600,10 @@ function handleMenuAction(name, payload = {}) {
     case 'open-panel':
       openPanel({ focusSession: payload.sessionId });
       break;
+    case 'open-prompt':
+      // 펫 위치를 알아야 해서 펫 창에게 부탁
+      sendCommand('open-prompt', { sessionId: payload.sessionId || null });
+      break;
     case 'connect-claude':
       connectClaude();
       break;
@@ -514,6 +629,7 @@ function showPetContextMenu() {
   const menu = Menu.buildFromTemplate([
     { label: `${store.settings.name}  ·  Lv.${pet.level}`, enabled: false },
     { type: 'separator' },
+    { label: '💬  말 걸기 (일 시키기)…', click: act('open-prompt'), accelerator: PROMPT_SHORTCUT },
     { label: `🗂  세션 보드${c.total ? ` (${c.total})` : ''}`, click: act('open-panel') },
     { label: '🏠  자리 비움 모드', type: 'checkbox', checked: store.settings.awayMode, click: (i) => handleMenuAction('away-toggle', { value: i.checked }) },
     { type: 'separator' },
@@ -547,6 +663,7 @@ function registerIpc() {
     version: app.getVersion(),
     platform: process.platform,
     shortcut: PANEL_SHORTCUT,
+    promptShortcut: PROMPT_SHORTCUT,
   }));
 
   ipcMain.on('pet:ignore-mouse', (e, ignore) => {
@@ -610,6 +727,18 @@ function registerIpc() {
     return true;
   });
   ipcMain.on('panel:close', () => panelWin && panelWin.hide());
+
+  // 펫에게 말 걸기
+  ipcMain.on('prompt:open', (_e, opts) => openPrompt(opts || {}));
+  ipcMain.on('prompt:close', () => promptWin && promptWin.hide());
+  ipcMain.handle('prompt:context', () => promptContext());
+  ipcMain.handle('prompt:pick-folder', () => pickFolder());
+  ipcMain.handle('prompt:send', async (_e, req) => {
+    const r = await sendPrompt(req || {});
+    if (r.ok && promptWin && !promptWin.isDestroyed()) promptWin.hide();
+    return r;
+  });
+  ipcMain.handle('tasks:cancel', (_e, taskId) => runner.cancel(taskId));
 
   // Claude Code 연결
   ipcMain.handle('claude:status', () => claudeStatus());
@@ -719,6 +848,12 @@ app.whenReady().then(async () => {
   hub = new SessionHub({ getSettings: () => store.settings, history: store.sessionsHistory });
   hub.on('changed', onHubChanged);
   bridge = new Bridge({ hub, onError: (err) => console.error('[bridge]', err) });
+  runner = new Runner();
+  runner.on('started', (t) => sendToAll('task:started', t));
+  runner.on('finished', (r) => {
+    sendToAll('task:finished', r);
+    hub.taskFinished(r);
+  });
   try {
     await bridge.start();
   } catch (err) {
@@ -750,6 +885,7 @@ app.whenReady().then(async () => {
   setInterval(petLoop, TICK_MS);
 
   globalShortcut.register(PANEL_SHORTCUT, () => openPanel({ toggle: true }));
+  globalShortcut.register(PROMPT_SHORTCUT, () => handleMenuAction('open-prompt'));
 
   screen.on('display-metrics-changed', fitPetWindow);
   screen.on('display-added', fitPetWindow);
@@ -769,6 +905,7 @@ app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('before-quit', () => {
   quitting = true;
   if (hub) hub.releaseAll(); // 기다리던 훅은 모두 터미널로 돌려보냄
+  if (runner) runner.stopAll();
   if (bridge) bridge.stop();
   if (store && pet) {
     pet.lastTick = Date.now();

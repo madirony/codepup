@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('codepup', {
   onSessions: listen('sessions:changed'),
   onClaudeStatus: listen('claude:status'),
   onPanelFocus: listen('panel:focus'),
+  onPromptTarget: listen('prompt:target'),
+  onTaskStarted: listen('task:started'),
+  onTaskFinished: listen('task:finished'),
 
   // 펫 창
   setIgnoreMouse: (ignore) => ipcRenderer.send('pet:ignore-mouse', ignore),
@@ -46,6 +49,13 @@ contextBridge.exposeInMainWorld('codepup', {
   restoreSessions: (ids) => ipcRenderer.invoke('sessions:restore', ids),
   forgetSession: (id) => ipcRenderer.invoke('sessions:forget', id),
   closePanel: () => ipcRenderer.send('panel:close'),
+  // 펫에게 말 걸기
+  openPrompt: (opts) => ipcRenderer.send('prompt:open', opts),
+  closePrompt: () => ipcRenderer.send('prompt:close'),
+  promptContext: () => ipcRenderer.invoke('prompt:context'),
+  pickFolder: () => ipcRenderer.invoke('prompt:pick-folder'),
+  sendPrompt: (req) => ipcRenderer.invoke('prompt:send', req),
+  cancelTask: (taskId) => ipcRenderer.invoke('tasks:cancel', taskId),
   claudeStatus: () => ipcRenderer.invoke('claude:status'),
   connectClaude: () => ipcRenderer.invoke('claude:connect'),
   disconnectClaude: () => ipcRenderer.invoke('claude:disconnect'),

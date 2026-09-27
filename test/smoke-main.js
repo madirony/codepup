@@ -10,6 +10,8 @@ fs.mkdirSync(OUT, { recursive: true });
 const HOME = path.join(OUT, 'home');
 fs.mkdirSync(HOME, { recursive: true });
 process.env.HOME = HOME;
+// 진짜 claude 대신 훅을 부르는 가짜 claude 로 "펫에게 말 걸기"를 확인
+process.env.CODEPUP_CLAUDE = path.join(__dirname, 'fixtures', 'fake-claude.sh');
 
 const { app, BrowserWindow, dialog } = require('electron');
 app.setPath('userData', path.join(OUT, 'userData'));
@@ -147,6 +149,44 @@ app.whenReady().then(async () => {
   const restore = await panel.webContents.executeJavaScript(`document.querySelector('#restore-box').classList.contains('hidden') ? '' : document.querySelector('#restore-list').innerText`);
   check('닫힌 세션이 "다시 열기" 목록에 뜬다', restore.includes('api-server'), restore.replace(/\n/g, ' '));
   await shot(panel, '05-panel-restore.png');
+
+  // 7-2) 펫에게 말 걸기: 더블클릭 → 입력창 → 새 작업 → 완료 알림 → [답장]으로 이어서
+  await run('window.__codepup.P.state = "idle"; window.__codepup.P.dur = 60');
+  await run(`window.codepup.updateSettings({ cpuReactive: false })`);
+  const pp = await run('({ x: window.__codepup.P.x, y: window.__codepup.P.y })');
+  await clickAt(pp.x, pp.y - 25);
+  await wait(120);
+  await clickAt(pp.x, pp.y - 25);
+  await wait(2500);
+  const promptWin = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/prompt/'));
+  check('더블클릭하면 말 걸기 창이 뜬다', !!promptWin && promptWin.isVisible());
+  const pr = (js) => promptWin.webContents.executeJavaScript(js);
+  const workDir = path.join(OUT, 'my-project');
+  fs.mkdirSync(workDir, { recursive: true });
+  const origPick = dialog.showOpenDialog;
+  dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [workDir] });
+  await pr(`document.querySelector('#target').value = 'new'; document.querySelector('#target').dispatchEvent(new Event('change')); document.querySelector('#pick').click()`);
+  await wait(500);
+  dialog.showOpenDialog = origPick;
+  await shot(promptWin, '05b-prompt.png');
+  await pr(`document.querySelector('#text').value = 'README 정리해 줘'; document.querySelector('#send').click()`);
+  await wait(4000);
+  const ownDone = await run(`document.querySelector('#bubble').innerText`);
+  check('펫에게 시킨 작업이 끝나면 알려 준다', ownDone.includes('my-project') && ownDone.includes('작업 끝'), ownDone.replace(/\n/g, ' / '));
+  const owned = (await run(`window.codepup.sessions()`)).list.find((x) => x.cwd === workDir);
+  check('펫이 실행한 세션으로 표시된다', owned && owned.owned, owned && owned.id);
+  await shot(pet, '05c-own-done.png');
+  // [답장] → 같은 세션 이어서
+  const replyBtn = await run(`(() => { const b = [...document.querySelectorAll('#bubble button')].find((x) => x.textContent === '답장'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await clickAt(replyBtn.x, replyBtn.y);
+  await wait(1500);
+  const tgt = await pr(`document.querySelector('#target').value`);
+  check('[답장]은 그 세션을 대상으로 말 걸기 창을 연다', owned && tgt === owned.id, tgt);
+  await pr(`document.querySelector('#text').value = '테스트도 추가해 줘'; document.querySelector('#send').click()`);
+  await wait(4000);
+  const again = (await run(`window.codepup.sessions()`)).list.find((x) => x.id === (owned && owned.id));
+  check('같은 세션으로 이어서 일한다', again && again.lastMessage.includes('테스트도 추가해 줘'), again && again.lastMessage);
+  await run(`window.codepup.updateSettings({ cpuReactive: true })`);
 
   // 8) 기존 상호작용: 연타 → 화남, 던지기 → 어지러움
   // (테스트 컨테이너는 CPU가 높아 펫이 계속 전력 질주하므로 이 구간에서는 CPU 반응을 끔)

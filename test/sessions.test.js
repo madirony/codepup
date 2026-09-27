@@ -185,3 +185,66 @@ test('설치기: 이전 이름(Speaki)으로 설치된 훅도 정리한다', () 
   assert.equal(JSON.stringify(s).includes('speaki-hook.sh'), false);
   assert.equal(s.hooks.Stop.length, 1);
 });
+
+const { Runner } = require('../src/main/runner');
+const FAKE = path.join(__dirname, 'fixtures', 'fake-claude.sh');
+
+function runOnce(runner, opts) {
+  return new Promise((resolve) => {
+    runner.once('finished', resolve);
+    runner.start(opts).then((r) => {
+      if (!r.ok) resolve(r);
+    });
+  });
+}
+
+test('러너: 새 작업을 실행하고 세션 ID와 결과를 받는다', async () => {
+  const runner = new Runner({ claudePath: FAKE });
+  const r = await runOnce(runner, { cwd: os.tmpdir(), prompt: '테스트 추가' });
+  assert.equal(r.ok, true);
+  assert.match(r.sessionId, /^fake-/);
+  assert.equal(r.result, '완료: 테스트 추가');
+});
+
+test('러너: 이어서(--resume)와 이어받기(--fork-session)', async () => {
+  const runner = new Runner({ claudePath: FAKE });
+  const resumed = await runOnce(runner, { cwd: os.tmpdir(), prompt: '다음', resume: 'abc' });
+  assert.equal(resumed.sessionId, 'abc');
+  const forked = await runOnce(runner, { cwd: os.tmpdir(), prompt: '다음', resume: 'abc', fork: true });
+  assert.match(forked.sessionId, /^fork-/);
+});
+
+test('러너: 실패하면 오류 메시지를 알려 준다', async () => {
+  const runner = new Runner({ claudePath: FAKE });
+  const r = await runOnce(runner, { cwd: os.tmpdir(), prompt: 'FAIL' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /가짜 실패/);
+  assert.equal((await runner.start({ cwd: '/no/such/dir', prompt: 'x' })).ok, false);
+});
+
+test('허브: 펫이 실행한 세션은 자리 비움이어도 기다리지 않고, 말 걸기 경로를 고른다', async () => {
+  const hub = hubWith({ awayMode: true });
+  await hub.handle('SessionStart', { ...base, session_id: 'own' }, { task: 't1' });
+  assert.equal(await hub.handle('Stop', { ...base, session_id: 'own', last_assistant_message: '끝' }), null);
+  assert.equal(hub.route('own').kind, 'resume');
+  // 터미널 세션: 끝났으면 이어받기, 자리 비움 대기 중이면 바로 답장, 일하는 중이면 busy
+  await hub.handle('SessionStart', { ...base, session_id: 'term' });
+  await hub.handle('UserPromptSubmit', { ...base, session_id: 'term', prompt: 'x' });
+  assert.equal(hub.route('term').kind, 'busy');
+  const p = hub.handle('Stop', { ...base, session_id: 'term', last_assistant_message: '끝' });
+  assert.equal(hub.route('term').kind, 'reply');
+  hub.release('term');
+  await p;
+  assert.equal(hub.route('term').kind, 'fork');
+  assert.equal(hub.route('nope').kind, 'unknown');
+});
+
+test('허브: 훅 없이 끝난 펫 작업도 완료 알림을 한 번만 보낸다', async () => {
+  const hub = hubWith();
+  const events = [];
+  hub.on('changed', (e) => events.push(e.event.type));
+  hub.taskFinished({ taskId: 't9', cwd: '/w/app', sessionId: 'x9', ok: true, result: '다 했어요' });
+  assert.deepEqual(events.filter((t) => t === 'done'), ['done']);
+  assert.equal(hub.list()[0].owned, true);
+  assert.equal(hub.list()[0].lastMessage, '다 했어요');
+});

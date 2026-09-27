@@ -79,6 +79,7 @@ class SessionHub extends EventEmitter {
       updatedAt: s.updatedAt,
       term: s.term,
       tty: s.tty,
+      owned: s.owned,
       pending: s.pending ? { ...s.pending, resolve: undefined, timer: undefined } : null,
       sharedQueued: (this.shares.get(s.id) || []).length,
     };
@@ -114,6 +115,8 @@ class SessionHub extends EventEmitter {
         transcriptPath: payload.transcript_path || '',
         term: meta.term || '',
         tty: meta.tty || '',
+        owned: false, // 펫이 직접 실행한 세션 (claude -p)
+        taskId: '',
         startedAt: this.now(),
         updatedAt: this.now(),
       };
@@ -126,13 +129,17 @@ class SessionHub extends EventEmitter {
     if (payload.transcript_path) s.transcriptPath = payload.transcript_path;
     if (meta.term) s.term = meta.term;
     if (meta.tty) s.tty = meta.tty;
+    if (meta.task) {
+      s.owned = true;
+      s.taskId = meta.task;
+    }
     s.updatedAt = this.now();
     this.remember(s);
     return s;
   }
 
   remember(s) {
-    const entry = { id: s.id, cwd: s.cwd, name: s.name, term: s.term, lastSeen: this.now(), ended: s.status === 'ended' };
+    const entry = { id: s.id, cwd: s.cwd, name: s.name, term: s.term, owned: !!s.owned, lastSeen: this.now(), ended: s.status === 'ended' };
     this.history = [entry, ...this.history.filter((h) => h.id !== s.id)].slice(0, HISTORY_MAX);
   }
 
@@ -159,6 +166,7 @@ class SessionHub extends EventEmitter {
 
       case 'UserPromptSubmit': {
         this.settle(s, null);
+        s.doneNotified = false;
         s.status = 'working';
         s.lastPrompt = clip(payload.prompt, 200);
         s.activity = '생각 중…';
@@ -245,7 +253,7 @@ class SessionHub extends EventEmitter {
     const d = describeTool(payload.tool_name, payload.tool_input);
     s.status = 'permission';
     s.activity = clip(`${d.title} 허락 대기`, 80);
-    const waitSec = cfg.awayMode ? (cfg.replyWaitMin || 30) * 60 : cfg.permissionWaitSec || 60;
+    const waitSec = cfg.awayMode || s.owned ? (cfg.replyWaitMin || 30) * 60 : cfg.permissionWaitSec || 60;
     const suggestion = Array.isArray(payload.permission_suggestions) ? payload.permission_suggestions[0] : null;
     const pending = {
       kind: 'permission',
@@ -278,7 +286,8 @@ class SessionHub extends EventEmitter {
     s.status = 'done';
     s.lastMessage = clip(payload.last_assistant_message, SUMMARY_MAX);
     s.activity = '작업 끝!';
-    if (!cfg.awayMode) {
+    if (!cfg.awayMode || s.owned) {
+      s.doneNotified = true;
       this.changed(s, { type: 'done', message: clip(s.lastMessage, 140) });
       return null;
     }
@@ -299,6 +308,45 @@ class SessionHub extends EventEmitter {
         additionalContext: `사용자가 데스크톱 펫(CodePup)으로 다음 지시를 보냈어요. 이 지시를 이어서 수행해 주세요:\n\n${answer.text}`,
       },
     };
+  }
+
+  // ---------- 펫이 실행한 작업 ----------
+
+  // 러너가 끝났을 때: 훅이 설치돼 있으면 이미 Stop 으로 알렸고, 아니면 여기서 알림
+  taskFinished({ taskId, cwd, sessionId, ok, result, error }) {
+    if (!sessionId) {
+      this.emit('changed', { session: { id: taskId, name: projectName(cwd), cwd }, event: { type: 'task-failed', error }, counts: this.counts() });
+      return;
+    }
+    const s = this.upsert({ session_id: sessionId, cwd }, { task: taskId });
+    s.updatedAt = this.now();
+    if (!ok) {
+      s.status = 'done';
+      s.activity = '실패했어요';
+      s.lastMessage = clip(error, SUMMARY_MAX);
+      this.changed(s, { type: 'task-failed', error: clip(error, 140) });
+      return;
+    }
+    const already = s.status === 'done' && s.doneNotified;
+    s.status = 'done';
+    s.activity = '작업 끝!';
+    if (result) s.lastMessage = clip(result, SUMMARY_MAX);
+    if (!already) this.changed(s, { type: 'done', message: clip(s.lastMessage, 140) });
+    s.doneNotified = false;
+  }
+
+  // 펫에게 말 걸었을 때 어디로 보낼지 정합니다
+  route(target) {
+    const s = this.sessions.get(target);
+    if (s) {
+      if (s.pending && s.pending.kind === 'reply') return { kind: 'reply', session: s };
+      if (s.status === 'working' || s.status === 'permission') return { kind: 'busy', session: s };
+      if (s.owned) return { kind: 'resume', session: s };
+      return { kind: 'fork', session: s };
+    }
+    const h = this.history.find((x) => x.id === target);
+    if (h) return { kind: 'resume', session: h };
+    return { kind: 'unknown' };
   }
 
   // ---------- UI 동작 ----------
