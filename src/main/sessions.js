@@ -5,6 +5,9 @@ const path = require('path');
 const { EventEmitter } = require('events');
 
 const HISTORY_MAX = 40;
+// 사용자가 직접 끝낸 세션 (/exit · Ctrl+D · /clear · /resume 로 다른 세션 전환 · 로그아웃)
+// → "닫힌 세션 다시 열기"에 넣지 않아요. 터미널이 꺼지거나 맥이 재시동돼서 사라진 세션만 복구 대상.
+const USER_ENDED = new Set(['prompt_input_exit', 'clear', 'resume', 'logout']);
 const SUMMARY_MAX = 1200;
 
 function projectName(cwd) {
@@ -81,7 +84,6 @@ class SessionHub extends EventEmitter {
       updatedAt: s.updatedAt,
       term: s.term,
       tty: s.tty,
-      owned: s.owned,
       context: s.context || null, // { pct, size }
       model: s.model || '',
       costUsd: s.costUsd || 0,
@@ -121,8 +123,6 @@ class SessionHub extends EventEmitter {
         transcriptPath: payload.transcript_path || '',
         term: meta.term || '',
         tty: meta.tty || '',
-        owned: false, // 펫이 직접 실행한 세션 (claude -p)
-        taskId: '',
         startedAt: this.now(),
         updatedAt: this.now(),
       };
@@ -135,17 +135,21 @@ class SessionHub extends EventEmitter {
     if (payload.transcript_path) s.transcriptPath = payload.transcript_path;
     if (meta.term) s.term = meta.term;
     if (meta.tty) s.tty = meta.tty;
-    if (meta.task) {
-      s.owned = true;
-      s.taskId = meta.task;
-    }
     if (touch) s.updatedAt = this.now();
     this.remember(s);
     return s;
   }
 
   remember(s) {
-    const entry = { id: s.id, cwd: s.cwd, name: s.name, term: s.term, owned: !!s.owned, lastSeen: this.now(), ended: s.status === 'ended' };
+    const entry = {
+      id: s.id,
+      cwd: s.cwd,
+      name: s.name,
+      term: s.term,
+      lastSeen: this.now(),
+      ended: s.status === 'ended',
+      endReason: s.endReason || '', // 'exit' = 사용자가 끝냄 · 'closed' = 터미널이 닫힘 · 'vanished' = 신호가 끊김
+    };
     this.history = [entry, ...this.history.filter((h) => h.id !== s.id)].slice(0, HISTORY_MAX);
   }
 
@@ -172,7 +176,6 @@ class SessionHub extends EventEmitter {
 
       case 'UserPromptSubmit': {
         this.settle(s, null);
-        s.doneNotified = false;
         s.status = 'working';
         s.lastPrompt = clip(payload.prompt, 200);
         s.activity = '생각 중…';
@@ -217,6 +220,7 @@ class SessionHub extends EventEmitter {
       case 'SessionEnd':
         this.settle(s, null);
         s.status = 'ended';
+        s.endReason = USER_ENDED.has(payload.reason) ? 'exit' : 'closed';
         s.activity = '종료됨';
         this.remember(s);
         this.changed(s, { type: 'ended' });
@@ -259,7 +263,7 @@ class SessionHub extends EventEmitter {
     const d = describeTool(payload.tool_name, payload.tool_input);
     s.status = 'permission';
     s.activity = clip(`${d.title} 허락 대기`, 80);
-    const waitSec = cfg.awayMode || s.owned ? (cfg.replyWaitMin || 30) * 60 : cfg.permissionWaitSec || 60;
+    const waitSec = cfg.awayMode ? (cfg.replyWaitMin || 30) * 60 : cfg.permissionWaitSec || 60;
     const suggestion = Array.isArray(payload.permission_suggestions) ? payload.permission_suggestions[0] : null;
     const pending = {
       kind: 'permission',
@@ -292,8 +296,7 @@ class SessionHub extends EventEmitter {
     s.status = 'done';
     s.lastMessage = clip(payload.last_assistant_message, SUMMARY_MAX);
     s.activity = '작업 끝!';
-    if (!cfg.awayMode || s.owned) {
-      s.doneNotified = true;
+    if (!cfg.awayMode) {
       this.changed(s, { type: 'done', message: clip(s.lastMessage, 140) });
       return null;
     }
@@ -403,50 +406,12 @@ class SessionHub extends EventEmitter {
       const gone = s.statusAt ? t - s.statusAt > statusTimeoutMs : t - lastSignal > idleTimeoutMs;
       if (gone) {
         s.status = 'ended';
+        s.endReason = 'vanished';
         this.remember(s);
         this.sessions.delete(s.id);
         this.changed(s, { type: 'ended' });
       }
     }
-  }
-
-  // ---------- 펫이 실행한 작업 ----------
-
-  // 러너가 끝났을 때: 훅이 설치돼 있으면 이미 Stop 으로 알렸고, 아니면 여기서 알림
-  taskFinished({ taskId, cwd, sessionId, ok, result, error }) {
-    if (!sessionId) {
-      this.emit('changed', { session: { id: taskId, name: projectName(cwd), cwd }, event: { type: 'task-failed', error }, counts: this.counts() });
-      return;
-    }
-    const s = this.upsert({ session_id: sessionId, cwd }, { task: taskId });
-    s.updatedAt = this.now();
-    if (!ok) {
-      s.status = 'done';
-      s.activity = '실패했어요';
-      s.lastMessage = clip(error, SUMMARY_MAX);
-      this.changed(s, { type: 'task-failed', error: clip(error, 140) });
-      return;
-    }
-    const already = s.status === 'done' && s.doneNotified;
-    s.status = 'done';
-    s.activity = '작업 끝!';
-    if (result) s.lastMessage = clip(result, SUMMARY_MAX);
-    if (!already) this.changed(s, { type: 'done', message: clip(s.lastMessage, 140) });
-    s.doneNotified = false;
-  }
-
-  // 펫에게 말 걸었을 때 어디로 보낼지 정합니다
-  route(target) {
-    const s = this.sessions.get(target);
-    if (s) {
-      if (s.pending && s.pending.kind === 'reply') return { kind: 'reply', session: s };
-      if (s.status === 'working' || s.status === 'permission') return { kind: 'busy', session: s };
-      if (s.owned) return { kind: 'resume', session: s };
-      return { kind: 'fork', session: s };
-    }
-    const h = this.history.find((x) => x.id === target);
-    if (h) return { kind: 'resume', session: h };
-    return { kind: 'unknown' };
   }
 
   // ---------- UI 동작 ----------
@@ -496,9 +461,9 @@ class SessionHub extends EventEmitter {
     return { ok: true, delivered: 'next-prompt' };
   }
 
-  // 복구 후보: 지금 열려 있지 않은 최근 세션
+  // 복구 후보: 지금 열려 있지 않은 최근 세션 중, 사용자가 직접 끝낸 건 빼고
   restorable(limit = 20) {
-    return this.history.filter((h) => !this.sessions.has(h.id) && h.cwd).slice(0, limit);
+    return this.history.filter((h) => !this.sessions.has(h.id) && h.cwd && h.endReason !== 'exit').slice(0, limit);
   }
 
   // 앱 종료 시 대기 중인 훅을 모두 풀어 줌

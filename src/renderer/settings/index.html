@@ -90,23 +90,11 @@
         <label class="row">자리 비움 대기 <input id="s-replyWaitMin" type="number" min="1" max="58"> 분</label>
       </div>
       <div class="card">
-        <h3>💬 펫에게 시킨 작업</h3>
-        <p class="muted">펫을 더블클릭해서 시킨 작업은 터미널 없이 <code>claude -p</code> 로 실행돼요.</p>
-        <div class="row">사용할 모델
-          <select id="s-taskModel">
-            <option value="">내 Claude Code 기본 모델</option>
-            <option value="sonnet">Sonnet</option>
-            <option value="opus">Opus</option>
-            <option value="haiku">Haiku (빠르고 가벼움)</option>
-            <option value="fable">Fable</option>
-          </select>
-        </div>
-        <p class="muted">기본 모델이 1M 컨텍스트 전용이라 추가 사용량이 필요하다는 오류가 나면, 자동으로 Sonnet 으로 한 번 더 시도해요.</p>
-      </div>
-      <div class="card">
         <h3>🔁 닫힌 세션 다시 열기</h3>
         <p class="muted">메뉴 막대나 세션 보드에서 닫힌 세션을 새 터미널 창으로 한 번에 다시 열어요. (claude --resume)</p>
         <label class="row check"><input id="s-restoreRemoteControl" type="checkbox"> 원격 제어(--rc)를 켠 채로 열기</label>
+        <label class="row check"><input id="s-restoreSkipPermissions" type="checkbox"> 권한 확인 건너뛰고 열기 (--dangerously-skip-permissions)</label>
+        <p class="muted">⚠️ 건너뛰면 Claude 가 파일 수정 · 명령 실행을 묻지 않고 바로 해요. 믿을 수 있는 프로젝트에서만 켜 주세요. 이렇게 연 세션은 허락 말풍선이 뜨지 않아요.</p>
         <div class="row">터미널
           <select id="s-restoreTerminal">
             <option value="auto">원래 쓰던 터미널 (Terminal / iTerm)</option>

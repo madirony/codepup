@@ -185,82 +185,6 @@ test('설치기: 이전 이름(Speaki)으로 설치된 훅도 정리한다', () 
   assert.equal(JSON.stringify(s).includes('speaki-hook.sh'), false);
   assert.equal(s.hooks.Stop.length, 1);
 });
-
-const { Runner, isLongContextError } = require('../src/main/runner');
-const FAKE = path.join(__dirname, 'fixtures', 'fake-claude.sh');
-
-function runOnce(runner, opts) {
-  return new Promise((resolve) => {
-    runner.once('finished', resolve);
-    runner.start(opts).then((r) => {
-      if (!r.ok) resolve(r);
-    });
-  });
-}
-
-test('러너: 새 작업을 실행하고 세션 ID와 결과를 받는다', async () => {
-  const runner = new Runner({ claudePath: FAKE });
-  const r = await runOnce(runner, { cwd: os.tmpdir(), prompt: '테스트 추가' });
-  assert.equal(r.ok, true);
-  assert.match(r.sessionId, /^fake-/);
-  assert.equal(r.result, '완료: 테스트 추가');
-});
-
-test('러너: 이어서(--resume)와 이어받기(--fork-session)', async () => {
-  const runner = new Runner({ claudePath: FAKE });
-  const resumed = await runOnce(runner, { cwd: os.tmpdir(), prompt: '다음', resume: 'abc' });
-  assert.equal(resumed.sessionId, 'abc');
-  const forked = await runOnce(runner, { cwd: os.tmpdir(), prompt: '다음', resume: 'abc', fork: true });
-  assert.match(forked.sessionId, /^fork-/);
-});
-
-test('러너: 실패하면 오류 메시지를 알려 준다', async () => {
-  const runner = new Runner({ claudePath: FAKE });
-  const r = await runOnce(runner, { cwd: os.tmpdir(), prompt: 'FAIL' });
-  assert.equal(r.ok, false);
-  assert.match(r.error, /가짜 실패/);
-  assert.equal((await runner.start({ cwd: '/no/such/dir', prompt: 'x' })).ok, false);
-});
-
-test('허브: 펫이 실행한 세션은 자리 비움이어도 기다리지 않고, 말 걸기 경로를 고른다', async () => {
-  const hub = hubWith({ awayMode: true });
-  await hub.handle('SessionStart', { ...base, session_id: 'own' }, { task: 't1' });
-  assert.equal(await hub.handle('Stop', { ...base, session_id: 'own', last_assistant_message: '끝' }), null);
-  assert.equal(hub.route('own').kind, 'resume');
-  // 터미널 세션: 끝났으면 이어받기, 자리 비움 대기 중이면 바로 답장, 일하는 중이면 busy
-  await hub.handle('SessionStart', { ...base, session_id: 'term' });
-  await hub.handle('UserPromptSubmit', { ...base, session_id: 'term', prompt: 'x' });
-  assert.equal(hub.route('term').kind, 'busy');
-  const p = hub.handle('Stop', { ...base, session_id: 'term', last_assistant_message: '끝' });
-  assert.equal(hub.route('term').kind, 'reply');
-  hub.release('term');
-  await p;
-  assert.equal(hub.route('term').kind, 'fork');
-  assert.equal(hub.route('nope').kind, 'unknown');
-});
-
-test('허브: 훅 없이 끝난 펫 작업도 완료 알림을 한 번만 보낸다', async () => {
-  const hub = hubWith();
-  const events = [];
-  hub.on('changed', (e) => events.push(e.event.type));
-  hub.taskFinished({ taskId: 't9', cwd: '/w/app', sessionId: 'x9', ok: true, result: '다 했어요' });
-  assert.deepEqual(events.filter((t) => t === 'done'), ['done']);
-  assert.equal(hub.list()[0].owned, true);
-  assert.equal(hub.list()[0].lastMessage, '다 했어요');
-});
-
-test('러너: 1M 컨텍스트 권한 오류를 알아보고, 모델을 지정하면 성공한다', async () => {
-  const runner = new Runner({ claudePath: FAKE });
-  const bad = await runOnce(runner, { cwd: os.tmpdir(), prompt: 'LONGCTX 정리' });
-  assert.equal(bad.ok, false);
-  assert.ok(isLongContextError(bad.error), bad.error);
-  assert.equal(bad.request.model, '');
-  const good = await runOnce(runner, { cwd: os.tmpdir(), prompt: 'LONGCTX 정리', model: 'sonnet', retried: true });
-  assert.equal(good.ok, true);
-  assert.equal(isLongContextError('API Error: Usage credits required for 1M context'), true);
-  assert.equal(isLongContextError('rate limited'), false);
-});
-
 const { STATUSLINE_MARKER } = require('../src/main/bridge');
 const { parseTail, scanActive } = require('../src/main/transcripts');
 
@@ -435,4 +359,27 @@ test('☕ 원격 작업 모드: 세션이 열려 있기만 해도 깨어 있는�
   assert.equal(awakeReason({ sessions: idle, now, mode: 'open' }).kind, 'open');
   assert.equal(awakeReason({ sessions: idle, now, mode: 'working' }), null);
   assert.equal(awakeReason({ sessions: [], now, mode: 'open' }), null);
+});
+
+test('닫힌 세션 다시 열기: 권한 확인 건너뛰기 옵션', () => {
+  const h = { id: 's1', cwd: '/Users/me/work/my-app' };
+  assert.equal(resumeCommand(h, { remoteControl: true, skipPermissions: true }), "cd '/Users/me/work/my-app' && claude --resume 's1' --rc --dangerously-skip-permissions");
+  assert.equal(resumeCommand(h, { remoteControl: false }), "cd '/Users/me/work/my-app' && claude --resume 's1'");
+});
+
+test('닫힌 세션 다시 열기: /exit 로 직접 끝낸 세션은 복구하지 않는다', async () => {
+  let t = 1_000_000;
+  const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
+  const mk = (id) => ({ session_id: id, cwd: `/w/${id}` });
+  for (const id of ['kept', 'quit', 'crash', 'switched']) await hub.handle('SessionStart', mk(id));
+  await hub.handle('SessionEnd', { ...mk('quit'), reason: 'prompt_input_exit' }); // 사용자가 /exit
+  await hub.handle('SessionEnd', { ...mk('switched'), reason: 'resume' }); // /resume 로 다른 세션으로
+  await hub.handle('SessionEnd', { ...mk('crash'), reason: 'other' }); // 터미널 창이 닫힘
+  hub.status({ session_id: 'kept', cwd: '/w/kept' }); // 상태 표시줄로 살아 있던 세션
+  t += 5 * 60000;
+  hub.sweep(); // 맥 재시동 등으로 신호가 끊김
+  const ids = hub.restorable().map((h) => h.id).sort();
+  assert.deepEqual(ids, ['crash', 'kept']);
+  assert.equal(hub.history.find((h) => h.id === 'kept').endReason, 'vanished');
+  assert.equal(hub.history.find((h) => h.id === 'quit').endReason, 'exit');
 });

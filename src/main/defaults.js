@@ -64,9 +64,9 @@ const DEFAULT_SETTINGS = {
   permissionWaitSec: 60, // 펫에서 권한 요청에 답할 수 있는 시간 (지나면 터미널 창으로)
   replyWaitMin: 30, // 자리 비움 모드에서 기다리는 시간
   restoreRemoteControl: true, // 세션 복구 시 --rc (원격 제어) 켜기
+  restoreSkipPermissions: false, // 세션 복구 시 --dangerously-skip-permissions
   restoreTerminal: 'auto', // 'auto' | 'Terminal' | 'iTerm'
   restoreExtraArgs: '',
-  taskModel: '', // 펫이 직접 실행하는 작업의 모델 ('' = 내 Claude Code 기본 모델)
   customImages: {}, // slotKey -> user-media 파일 이름
   customSounds: {},
 };

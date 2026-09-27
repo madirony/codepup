@@ -28,9 +28,10 @@ function osascript(lines) {
 }
 
 // 세션을 다시 여는 셸 명령
-function resumeCommand(session, { remoteControl = true, extraArgs = '' } = {}) {
+function resumeCommand(session, { remoteControl = true, skipPermissions = false, extraArgs = '' } = {}) {
   const parts = ['claude', '--resume', shQuote(session.id)];
   if (remoteControl) parts.push('--rc');
+  if (skipPermissions) parts.push('--dangerously-skip-permissions');
   if (extraArgs && /^[\w\s=.:/@,+-]*$/.test(extraArgs)) parts.push(extraArgs.trim());
   return `cd ${shQuote(session.cwd || '~')} && ${parts.join(' ')}`;
 }
