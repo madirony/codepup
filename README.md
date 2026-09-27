@@ -82,6 +82,7 @@ python3 tools/draw_chihuahua.py   # 치와와 표정 20종 · 앱 아이콘 다�
   ```bash
   git tag v2.1.0 && git push origin v2.1.0
   ```
+  또는 GitHub → **Actions → Build & Release → Run workflow** 에 버전(예: `2.1.0`)을 넣고 실행해도 태그와 Release가 함께 만들어져요.
 
 ### 구조
 ```
