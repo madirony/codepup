@@ -2,7 +2,9 @@ name: Build & Release (macOS dmg)
 
 # - push / PR: 테스트 + dmg 빌드 → Actions 아티팩트로 업로드
 # - v* 태그 push (예: v2.1.0): 위 과정 + GitHub Release 를 만들고 dmg 첨부
-# - Actions 탭 → Run workflow 에서 버전(예: 2.1.0)을 넣으면: 태그 v2.1.0 + Release 를 한 번에
+# - main 에 push 했을 때 package.json 버전의 Release(v<version>)가 아직 없으면: 태그 + Release 를 자동으로
+#   → 배포하려면 package.json 의 version 만 올려서 main 에 push 하면 돼요
+# - Actions 탭 → Run workflow 에서 버전(예: 2.1.0)을 넣어도 태그 + Release 를 한 번에
 on:
   push:
     branches: [main]
@@ -44,7 +46,17 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="${INPUT_VERSION#v}"; fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v="${GITHUB_REF_NAME#v}"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            v="${INPUT_VERSION#v}"
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            # package.json 버전의 태그가 아직 없으면 새 버전으로 보고 배포
+            pv=$(node -p "require('./package.json').version")
+            if git ls-remote --exit-code --tags origin "refs/tags/v$pv" >/dev/null 2>&1; then v=""; else v="$pv"; fi
+          else
+            v=""
+          fi
           if [[ -n "$v" && ! "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then echo "잘못된 버전: $v"; exit 1; fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
 

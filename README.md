@@ -78,7 +78,7 @@ npm run dist:mac          # dmg 빌드 (macOS 에서)
 python3 tools/draw_chihuahua.py   # 치와와 표정 20종 · 앱 아이콘 다시 그리기
 ```
 - 스모크 테스트(가짜 Claude Code 세션으로 전체 흐름 확인): `SMOKE_OUT=/tmp/smoke xvfb-run -a npx electron test/smoke-main.js --no-sandbox`
-- **자동 배포**: `main` 에 push 하면 GitHub Actions(macOS 러너)가 테스트 후 dmg를 빌드해 아티팩트로 올려요. `v2.1.0` 같은 태그를 push 하면 GitHub Release를 만들고 dmg를 첨부해요.
+- **자동 배포**: `main` 에 push 하면 GitHub Actions(macOS 러너)가 테스트 후 dmg를 빌드해요. 이때 `package.json` 의 `version` 에 해당하는 Release(`v<version>`)가 아직 없으면 **태그와 Release를 자동으로 만들고 dmg를 첨부**해요. 새 버전을 배포하려면 version 만 올려서 push 하면 돼요. 태그를 직접 push 해도 돼요.
   ```bash
   git tag v2.1.0 && git push origin v2.1.0
   ```
