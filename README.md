@@ -1,4 +1,4 @@
-# 🐶 CodePup — Claude 가 나를 기다리면 달려와서 알려주는 강아지
+# 🐶 CodePup
 
 > Claude Code 에게 일 맡겨 놓고 딴 거 하다가, **허락(y/n) 창에서 멈춘 줄도 모르고 있었거나, 작업이 끝난 걸 뒤늦게 알아서** 시간을 날린 적이 있나요? ~~dangerously-skip-permissions~~
 > 
