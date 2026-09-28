@@ -57,5 +57,6 @@ Claude Code 에게 일을 맡기면, 개발자는 **기다리는 사람**이 돼
 
 ## 배포 링크
 - 소스 · 다운로드: https://github.com/madirony/codepup (Releases 에 dmg)
-- 서명이 없는 앱이라 처음 열 때 경고가 뜨면 **앱을 오른쪽 클릭 → 열기** 로 한 번 열어 주세요.
+- 설치: dmg 에서 Applications 로 옮긴 뒤 **터미널에서 `xattr -cr /Applications/CodePup.app` 을 한 번 꼭 실행**해 주세요 (서명이 없는 앱이라 안 하면 "손상된 앱"으로 막혀요).
+- 세션을 다시 열 때 macOS 가 자동화 · 손쉬운 사용 권한을 물으면 허용해 주세요. iTerm 플러그인 같은 건 필요 없어요.
 - 제출 전에 레포를 퍼블릭으로 전환해야 다른 사람이 받을 수 있어요.
