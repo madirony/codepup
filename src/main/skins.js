@@ -63,6 +63,12 @@ function cleanManifest(m, id, source) {
     expressions: Array.isArray(m.expressions) ? m.expressions.filter((e) => images[e]) : [],
     defaultName: m.defaultName ? String(m.defaultName).slice(0, 20) : '',
     catchphrase: m.catchphrase ? String(m.catchphrase).slice(0, 20) : '',
+    // 소리 반복 횟수 (예: { done: 2 } → 작업 끝 소리를 두 번), 1~4번
+    soundRepeat: Object.fromEntries(
+      Object.entries(m.soundRepeat && typeof m.soundRepeat === 'object' ? m.soundRepeat : {})
+        .map(([k, v]) => [String(k), Math.round(Number(v))])
+        .filter(([, v]) => v >= 1 && v <= 4)
+    ),
     phrases: Array.isArray(m.phrases) ? m.phrases.map((x) => String(x).slice(0, 40)).slice(0, 50) : [],
     // 렌더러에서 쓰는 URL 앞부분
     base: source === 'bundled' ? `skins/${id}/` : `user-skins/${id}/`,

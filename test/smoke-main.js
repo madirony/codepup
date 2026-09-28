@@ -196,7 +196,8 @@ app.whenReady().then(async () => {
   const hello = await run(`document.querySelector('#bubble').innerText`);
   check('스킨을 바꾸면 새 이름으로 인사한다', hello.includes('스피키예요') && !hello.includes('초코'), hello);
   await wait(1800);
-  const sk = await run(`window.codepup.init().then((b) => ({ id: b.skin.id, name: b.settings.name }))`);
+  const sk = await run(`window.codepup.init().then((b) => ({ id: b.skin.id, name: b.settings.name, repeat: b.skin.soundRepeat, done: b.skin.sounds.done, ambient: b.settings.ambientSounds }))`);
+  check('스피키는 작업 끝에 "쪼아요~"를 두 번 · 돌아다니는 소리는 꺼짐', sk.repeat && sk.repeat.done === 2 && String(sk.done).includes('chuayo') && sk.ambient === false, JSON.stringify(sk));
   check('스피키 스킨으로 바꾸면 이름도 스피키', sk.id === 'speaki' && sk.name === '스피키', JSON.stringify(sk));
   await shot(pet, '06-speaki-skin.png');
 

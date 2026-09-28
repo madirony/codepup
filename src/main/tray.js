@@ -164,27 +164,34 @@ class PetTray {
     const icon = (s) =>
       s.pending && s.pending.kind === 'permission' ? '🔔' : s.status === 'working' ? '⚙️' : s.status === 'done' ? '✅' : '💤';
     items.push({ label: `🗂  세션 보드 열기${list.length ? `  (${list.length})` : ''}`, click: act('open-panel'), accelerator: 'CommandOrControl+Shift+J' });
-    for (const s of list.slice(0, 8)) {
-      items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}`.slice(0, 80), click: act('open-panel', { sessionId: s.id }) });
+    // 세션이 많아도 메뉴가 길어지지 않게: 허락 대기 → 작업 중 → 끝남 순으로 5개까지만, 나머지는 보드에서
+    const MENU_MAX = 5;
+    const rank = (s) => (s.pending ? 0 : s.status === 'working' ? 1 : s.status === 'done' ? 2 : 3);
+    const shown = [...list].sort((a, b) => rank(a) - rank(b) || b.updatedAt - a.updatedAt).slice(0, MENU_MAX);
+    for (const s of shown) {
+      items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}`.slice(0, 60), click: act('open-panel', { sessionId: s.id }) });
     }
+    if (list.length > MENU_MAX) items.push({ label: `     … 외 ${list.length - MENU_MAX}개 (보드에서 보기)`, click: act('open-panel') });
     const aw = this.state.awake || {};
     let awakeText = '☕  잠자기 방지 꺼짐';
     if (aw.active && aw.manual) awakeText = '☕  계속 깨어 있는 중 (직접 켬)';
-    else if (aw.active && aw.reason && aw.reason.kind === 'open') awakeText = `☕  Claude 세션 ${aw.reason.count}개가 열려 있어서 맥이 잠들지 않아요`;
-    else if (aw.active && aw.reason) awakeText = `☕  Claude 작업 중이라 맥이 잠들지 않아요 (${aw.reason.kind === 'task' ? '펫이 시킨 작업' : `세션 ${aw.reason.count}개`})`;
-    else if (aw.active) awakeText = '☕  작업이 끝나서 곧 잠자기 방지를 풀어요';
-    else if (aw.external) awakeText = '☕  다른 앱이 잠자기를 막고 있어요 (caffeinate 등)';
-    items.push({ label: awakeText, enabled: false });
+    else if (aw.active && aw.reason && aw.reason.kind === 'open') awakeText = `☕  세션 ${aw.reason.count}개가 열려 있어서 잠들지 않아요`;
+    else if (aw.active && aw.reason) awakeText = `☕  Claude 작업 중이라 잠들지 않아요`;
+    else if (aw.active) awakeText = '☕  곧 잠자기 방지를 풀어요';
+    else if (aw.external) awakeText = '☕  다른 앱이 잠자기를 막는 중 (caffeinate 등)';
+    if (aw.lid) awakeText += ' · 🧳 덮개를 닫아도 켜짐';
+    // 잠자기 방지는 한 줄 + 하위 메뉴 하나로
     items.push({
-      label: '     잠자기 방지',
+      label: awakeText,
       submenu: [
         { label: 'Claude 세션이 열려 있으면 (원격 작업용)', type: 'radio', checked: settings.keepAwake !== false && settings.keepAwakeMode !== 'working', click: () => { this.onAction('awake-auto', { value: true }); this.onAction('awake-mode', { value: 'open' }); } },
         { label: 'Claude 가 일할 때만', type: 'radio', checked: settings.keepAwake !== false && settings.keepAwakeMode === 'working', click: () => { this.onAction('awake-auto', { value: true }); this.onAction('awake-mode', { value: 'working' }); } },
         { label: '자동으로 막지 않기', type: 'radio', checked: settings.keepAwake === false, click: () => this.onAction('awake-auto', { value: false }) },
+        { type: 'separator' },
+        { label: '지금부터 계속 깨어 있기', type: 'checkbox', checked: !!settings.keepAwakeManual, click: (i) => this.onAction('awake-manual', { value: i.checked }) },
+        { label: '🧳 덮개를 닫아도 잠들지 않기 (외출용)', type: 'checkbox', checked: !!aw.lid, click: (i) => this.onAction('awake-lid', { value: i.checked }) },
       ],
     });
-    items.push({ label: '     지금부터 계속 깨어 있기', type: 'checkbox', checked: !!settings.keepAwakeManual, click: (i) => this.onAction('awake-manual', { value: i.checked }) });
-    items.push({ label: `     🧳 덮개 닫아도 안 잠들기 (외출용)${aw.lid ? '  · 켜짐' : ''}`, type: 'checkbox', checked: !!aw.lid, click: (i) => this.onAction('awake-lid', { value: i.checked }) });
     if (restorable.length) {
       items.push({
         label: `🔁  닫힌 세션 다시 열기 (${restorable.length})`,

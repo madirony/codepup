@@ -45,7 +45,7 @@ const DEFAULT_SETTINGS = {
   moveMode: 'free', // 'free' = 화면 전체, 'ground' = 화면 아래쪽만
   soundEnabled: true,
   volume: 0.6,
-  ambientSounds: true, // 혼잣말·노래처럼 스스로 내는 소리
+  ambientSounds: false, // 혼잣말·노래처럼 스스로 내는 소리 (기본은 꺼서, 소리가 나면 = 알림)
   bubbles: true, // 말풍선
   phrases: DEFAULT_PHRASES,
   cpuReactive: true, // CPU 사용률에 따라 빨라지기

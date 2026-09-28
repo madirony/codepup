@@ -80,7 +80,7 @@
           </select>
         </div>
         <label class="row check"><input id="s-keepAwakeManual" type="checkbox"> 지금부터 계속 깨어 있기 (앱을 다시 켜도 유지)</label>
-        <p class="muted">노트북 덮개를 닫으면 macOS 는 잠자기 방지 앱이 있어도 잠들어요. 외출할 때는 메뉴 막대의 <b>🧳 덮개 닫아도 안 잠들기</b>를 켜 주세요 (관리자 암호를 한 번 물어봐요).</p>
+        <p class="muted">노트북 덮개를 닫으면 macOS 는 잠자기 방지 앱이 있어도 잠들어요. 외출할 때는 메뉴 막대의 <b>🧳 덮개를 닫아도 잠들지 않기</b>를 켜 주세요 (관리자 암호를 한 번 물어봐요).</p>
       </div>
       <div class="card">
         <h3>알림 · 응답</h3>
@@ -129,7 +129,8 @@
       <div class="card">
         <label class="row check"><input id="s-soundEnabled" type="checkbox"> 소리 켜기</label>
         <label class="row">볼륨 <input id="s-volume" type="range" min="0" max="1" step="0.05"><output id="o-volume"></output></label>
-        <label class="row check"><input id="s-ambientSounds" type="checkbox"> 혼잣말 · 노래 소리 (스스로 내는 소리)</label>
+        <label class="row check"><input id="s-ambientSounds" type="checkbox"> 돌아다니며 혼잣말 · 노래 소리 내기</label>
+        <p class="muted">꺼 두면 소리가 날 때 = 작업이 끝났거나 허락이 필요할 때예요. 스피키는 작업이 끝나면 "쪼아요~ 쪼아요~" 해요.</p>
         <label class="row check"><input id="s-bubbles" type="checkbox"> 말풍선 보이기</label>
         <label class="col">혼잣말 대사 (한 줄에 하나)
           <textarea id="s-phrases" rows="5"></textarea>

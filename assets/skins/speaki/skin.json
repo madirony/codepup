@@ -60,7 +60,7 @@
       "sound/chuayo.mp3"
     ],
     "done": [
-      "sound/speaki.mp3"
+      "sound/chuayo.mp3"
     ],
     "permission": [
       "sound/a.mp3"
@@ -92,5 +92,8 @@
   "extraSounds": [
     "sound/fullbazeyo.mp3",
     "sound/uaa.mp3"
-  ]
+  ],
+  "soundRepeat": {
+    "done": 2
+  }
 }

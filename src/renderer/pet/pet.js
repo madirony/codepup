@@ -91,9 +91,21 @@
     const urls = soundUrls(key);
     if (urls.length) {
       if (voice) voice.pause();
-      const a = new Audio(pick(urls));
+      const url = pick(urls);
+      const a = new Audio(url);
       a.volume = settings.volume;
       a.play().catch(() => {});
+      // 스킨이 정한 만큼 반복 (예: 스피키 작업 끝 → "쪼아요~ 쪼아요~")
+      let left = ((skin.soundRepeat && skin.soundRepeat[key]) || 1) - 1;
+      a.addEventListener('ended', function again() {
+        if (left-- <= 0 || voice !== a) return;
+        setTimeout(() => {
+          if (voice !== a) return;
+          a.currentTime = 0;
+          a.play().catch(() => {});
+          lastVoiceAt = now();
+        }, 120);
+      });
       voice = a;
       lastVoiceAt = now();
       return a;

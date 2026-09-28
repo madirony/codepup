@@ -102,5 +102,6 @@ test('저장된 설정이 일부만 있어도 기본값과 합쳐진다', () => 
   assert.equal(s.size, 50);
   assert.equal(s.tray.cpu, false);
   assert.equal(s.tray.sessions, true);
+  assert.equal(s.ambientSounds, false); // 돌아다니며 내는 소리는 기본 끔
   assert.deepEqual(s.customImages, {});
 });

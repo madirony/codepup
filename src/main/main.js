@@ -476,7 +476,7 @@ async function toggleLid(disable) {
   if (disable) {
     const res = await dialog.showMessageBox({
       type: 'warning',
-      buttons: ['취소', '덮개 닫아도 안 잠들기'],
+      buttons: ['취소', '덮개를 닫아도 잠들지 않기'],
       defaultId: 1,
       cancelId: 0,
       message: '노트북 덮개를 닫아도 맥이 잠들지 않게 할까요?',
@@ -488,7 +488,7 @@ async function toggleLid(disable) {
   }
   const r = await awake.setLid(disable);
   if (!r.ok && r.error !== '취소했어요') dialog.showErrorBox('설정하지 못했어요', r.error);
-  if (r.ok) sendCommand('say', { text: disable ? '🧳 덮개를 닫아도 안 잘게요! 다녀오세요~' : '🛏 이제 덮개를 닫으면 잘게요', tex: 'happy' });
+  if (r.ok) sendCommand('say', { text: disable ? '🧳 덮개를 닫아도 잠들지 않을게요! 다녀오세요~' : '🛏 이제 덮개를 닫으면 잘게요', tex: 'happy' });
 }
 
 function onAwakeChanged(state) {
@@ -787,6 +787,12 @@ app.whenReady().then(async () => {
   store = new Store(app.getPath('userData'));
   skins = new Skins({ bundledDir: path.join(APP_ROOT, 'assets', 'skins'), userDir: path.join(app.getPath('userData'), 'skins') });
   if (!skins.list().some((k) => k.id === store.settings.skin)) store.settings.skin = 'chihuahua';
+  if (!store.settings.quietWander) {
+    // 2.7.4: 돌아다니며 내는 소리는 기본으로 끔 → 소리가 나면 작업 끝 · 허락 요청이라는 뜻. 한 번만 바꾸고 이후엔 사용자 선택
+    store.settings.quietWander = true;
+    store.settings.ambientSounds = false;
+    store.saveSoon();
+  }
   if (!store.settings.compactTray) {
     // 2.7: 메뉴 막대를 아이콘 위주로 (CPU 는 아이콘 달리기 속도로). 한 번만 바꾸고 이후엔 사용자 선택을 따름
     store.settings.compactTray = true;
