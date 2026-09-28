@@ -414,12 +414,14 @@ async function connectClaude(ask = true) {
       message: 'Claude Code 와 연결할까요?',
       detail:
         '~/.claude/settings.json 에 알림용 훅을 추가해요. 기존 설정은 그대로 두고, 바꾸기 전에 백업(settings.json.codepup-backup)을 남겨요.\n\n' +
-        '연결하면 세션이 끝나거나 허락이 필요할 때 펫이 알려 주고, 펫에서 바로 허락·거절할 수 있어요. 상태 표시줄로 5시간·주간 한도와 컨텍스트 사용률도 보여 줘요. 쓰시던 상태 표시줄(claude-hud 등)은 그대로 이어서 나와요.',
+        '연결하면 세션이 끝나거나 허락이 필요할 때 펫이 알려 주고, 펫에서 바로 허락·거절할 수 있어요.\n\n이미 열려 있는 세션은 연결 후 한 번 다시 열어야 알림이 와요 (세션 보드의 [알림 켜기] 버튼으로 한 번에).',
     });
     if (res.response !== 1) return { ok: false, canceled: true };
   }
   try {
     bridge.install();
+    store.settings.hooksSince = Date.now(); // 이 뒤에 시작한 claude 만 훅을 읽어요
+    store.saveSoon();
     sendToAll('claude:status', claudeStatus());
     if (tray) tray.update({ claude: claudeStatus() });
     sendCommand('say', { text: '이제 Claude 세션을 지켜볼게요!', tex: 'happy' });
@@ -443,6 +445,46 @@ function disconnectClaude() {
 function restoreOptions() {
   const s = store.settings;
   return { remoteControl: s.restoreRemoteControl, skipPermissions: s.restoreSkipPermissions, extraArgs: s.restoreExtraArgs, terminal: s.restoreTerminal, tabs: s.restoreTabs };
+}
+
+// 알림이 꺼진 세션(연결 전에 연 세션)을 같은 탭에서 닫았다가 바로 다시 열기
+async function reopenForHooks(ids) {
+  const targets = hub.needingReopen().filter((s) => !ids || ids.includes(s.id));
+  if (!targets.length) return { ok: false, error: '다시 열 세션이 없어요' };
+  // 방금까지 대화 기록이 바뀐 세션은 일하는 중일 수 있어서 건너뜀
+  const busy = [];
+  const ready = [];
+  for (const s of targets) {
+    let m = 0;
+    try {
+      m = s.transcriptPath ? fs.statSync(s.transcriptPath).mtimeMs : 0;
+    } catch {
+      // 없으면 조용한 것으로
+    }
+    (Date.now() - m < 20000 ? busy : ready).push(s);
+  }
+  if (!ready.length) return { ok: false, error: '지금 일하는 중인 것 같아요. 끝나면 다시 눌러 주세요' };
+  const res = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['취소', `${ready.length}개 다시 열기`],
+    defaultId: 1,
+    cancelId: 0,
+    message: '알림이 꺼진 세션을 같은 탭에서 다시 열까요?',
+    detail:
+      `CodePup 을 연결하기 전에 연 세션은 알림을 보낼 수 없어요. 그 탭의 claude 를 끝내고 곧바로 같은 대화를 이어서 열어요 (원래 옵션 그대로).\n\n` +
+      ready.map((s) => `• ${s.name}`).join('\n') +
+      (busy.length ? `\n\n건너뜀 (지금 일하는 중): ${busy.map((s) => s.name).join(', ')}` : ''),
+  });
+  if (res.response !== 1) return { ok: false, canceled: true };
+  let done = 0;
+  const errors = [];
+  for (const s of ready) {
+    const r = await terminals.reopenInPlace({ id: s.id, cwd: s.cwd }, { pid: s.pid, tty: s.tty, command: s.command });
+    if (r.ok) done++;
+    else errors.push(`${s.name}: ${r.error}`);
+  }
+  if (done) sendCommand('say', { text: `🔔 ${done}개 세션 알림을 켰어요!`, tex: 'happy' });
+  return { ok: done > 0, reopened: done, errors };
 }
 
 async function restoreSessions(ids) {
@@ -540,7 +582,9 @@ async function attachRunning(procs) {
     }
     taken.add(id);
     knownTtys.add(p.tty);
-    hub.attach({ session_id: id, cwd, tty: p.tty, transcript_path: file });
+    const since = store.settings.hooksSince || 0;
+    const needsReopen = !!(bridge && bridge.isInstalled() && since && p.startedAt && p.startedAt < since - 5000);
+    hub.attach({ session_id: id, cwd, tty: p.tty, transcript_path: file, pid: p.pid, command: p.command, needsReopen });
   }
 }
 
@@ -602,6 +646,9 @@ function handleMenuAction(name, payload = {}) {
       break;
     case 'connect-claude':
       connectClaude();
+      break;
+    case 'reopen-hooks':
+      reopenForHooks(payload && payload.ids);
       break;
     case 'restore':
       restoreSessions(payload.ids);
@@ -712,6 +759,7 @@ function registerIpc() {
     return s ? terminals.focusSession(s) : { ok: false, error: '세션이 없어요' };
   });
   ipcMain.handle('sessions:restore', (_e, ids) => restoreSessions(ids));
+  ipcMain.handle('sessions:reopen-hooks', (_e, ids) => reopenForHooks(ids));
   ipcMain.handle('sessions:forget', (_e, id) => {
     hub.history = hub.history.filter((h) => h.id !== id);
     persistPet();
@@ -848,6 +896,11 @@ app.whenReady().then(async () => {
     console.error('[bridge] failed to start', err);
   }
   try {
+    if (bridge.isInstalled() && !store.settings.hooksSince) {
+      // 언제 연결했는지 모르는 예전 설치: 지금부터로 봄 (그 전에 켠 세션은 [알림 켜기] 대상)
+      store.settings.hooksSince = Date.now();
+      store.saveSoon();
+    }
     bridge.refresh(); // 예전 버전이 넣은 5초 새로고침 등을 이 버전 설정으로 갱신
   } catch (err) {
     console.error('[bridge] refresh', err);

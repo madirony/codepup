@@ -88,6 +88,7 @@ class SessionHub extends EventEmitter {
       updatedAt: s.updatedAt,
       term: s.term,
       tty: s.tty,
+      needsReopen: !!s.needsReopen,
       pending: s.pending ? { ...s.pending, resolve: undefined, timer: undefined } : null,
     };
   }
@@ -166,6 +167,7 @@ class SessionHub extends EventEmitter {
   async handle(event, payload, meta = {}) {
     if (!payload || typeof payload.session_id !== 'string' || !payload.session_id) return null;
     const s = this.upsert(payload, meta);
+    s.needsReopen = false; // 훅이 오면 알림이 켜진 세션
 
     switch (event) {
       case 'SessionStart':
@@ -309,18 +311,31 @@ class SessionHub extends EventEmitter {
 
   // 터미널에서 돌고 있는 claude 를 직접 찾아 붙이기 (CodePup 을 켜기 전부터 열려 있던 세션도 바로 보이게)
   // 터미널(tty)을 알아서, 창을 닫으면 바로 정리돼요
-  attach({ session_id, cwd, tty, transcript_path }) {
+  // needsReopen: CodePup 을 연결하기 전에 시작된 claude → 훅을 모르니 알림이 안 와요 (다시 열면 해결)
+  attach({ session_id, cwd, tty, transcript_path, pid, command, needsReopen = false }) {
     if (!session_id || !cwd || !tty) return;
     const known = [...this.sessions.values()].find((x) => x.tty === tty);
-    if (known) return; // 이 터미널의 세션은 이미 알고 있음
+    if (known) {
+      if (pid) known.pid = pid;
+      if (command) known.command = command;
+      return; // 이 터미널의 세션은 이미 알고 있음
+    }
     const cur = this.sessions.get(session_id);
     if (cur) {
       if (!cur.tty) cur.tty = tty;
       return;
     }
     const s = this.upsert({ session_id, cwd, transcript_path }, { tty });
-    s.activity = '열려 있는 세션';
+    s.activity = needsReopen ? '알림 꺼짐 · 다시 열면 켜져요' : '열려 있는 세션';
+    s.pid = pid || 0;
+    s.command = command || '';
+    s.needsReopen = needsReopen;
     this.changed(s, { type: 'discovered' });
+  }
+
+  // 알림이 꺼진 (CodePup 연결 전에 연) 세션들
+  needingReopen() {
+    return [...this.sessions.values()].filter((s) => s.needsReopen && s.pid && s.tty);
   }
 
   // 신호가 끊긴 세션 정리 (터미널을 그냥 닫으면 SessionEnd 가 안 올 수 있음)

@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('codepup', {
   sessions: () => ipcRenderer.invoke('sessions:get'),
   decide: (id, decision) => ipcRenderer.invoke('sessions:decide', id, decision),
   focusSession: (id) => ipcRenderer.invoke('sessions:focus', id),
+  reopenForHooks: (ids) => ipcRenderer.invoke('sessions:reopen-hooks', ids),
   restoreSessions: (ids) => ipcRenderer.invoke('sessions:restore', ids),
   forgetSession: (id) => ipcRenderer.invoke('sessions:forget', id),
   closePanel: () => ipcRenderer.send('panel:close'),

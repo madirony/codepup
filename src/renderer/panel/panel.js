@@ -113,6 +113,7 @@
     const dot = el('span', `dot ${cls}`);
     dot.title = label;
     const sub = s.status === 'done' && s.lastMessage ? md.summary(s.lastMessage, 60) : s.activity || label;
+    if (s.needsReopen) dot.title = '알림 꺼짐 · 위의 [알림 켜기]로 다시 열면 켜져요';
     head.append(dot, el('span', 'name', s.name), el('span', 'sub', sub), el('span', 'ago', ago(s.updatedAt)));
     head.addEventListener('click', () => {
       if (open) expanded.delete(s.id);
@@ -156,6 +157,9 @@
       : 'Claude Code 세션을 시작하면 여기에 나타나요';
     $('connect').classList.toggle('hidden', !!(claude && claude.installed));
     $('filter').classList.toggle('hidden', sessions.length < 6 && !filter);
+    const muted = sessions.filter((s) => s.needsReopen);
+    $('reopen').classList.toggle('hidden', !muted.length);
+    $('reopen-title').textContent = `🔕 알림이 꺼진 세션 ${muted.length}개 (${muted.map((s) => s.name).join(', ')})`;
 
     const list = $('list');
     const q = filter.trim().toLowerCase();
@@ -238,6 +242,11 @@
   $('connect-btn').addEventListener('click', async () => {
     const r = await api.connectClaude();
     toast(r.ok ? '연결했어요! 새로 여는 세션부터 적용돼요' : r.error || '연결하지 못했어요');
+  });
+  $('reopen-btn').addEventListener('click', async () => {
+    const r = await api.reopenForHooks(null);
+    if (r.ok) toast(`${r.reopened}개 세션을 다시 열었어요 · 이제 알림이 와요`);
+    else if (!r.canceled) toast(r.error || (r.errors || []).join(' / ') || '다시 열지 못했어요');
   });
   $('restore-all').addEventListener('click', async () => report(await api.restoreSessions(null)));
   window.addEventListener('keydown', (e) => {

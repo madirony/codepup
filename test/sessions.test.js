@@ -235,6 +235,36 @@ test('이미 열려 있던 claude 를 터미널에서 찾아 붙인다', () => {
   assert.deepEqual(hub.list().map((s) => [s.id, s.tty]), [['new', 'ttys005']]);
 });
 
+test('알림 켜기: 연결 전에 연 세션을 원래 옵션 그대로 같은 탭에서 다시 연다', () => {
+  const t = require('../src/main/terminals');
+  const ps = [
+    '  501 Mon Sep 28 14:03:11 2026 ttys003  claude --dangerously-skip-permissions --resume 1b2c3d4e-0000-4000-8000-123456789abc --remote-control study',
+    '  502 Mon Sep 28 15:00:00 2026 ??       /Applications/CodePup.app/Contents/MacOS/CodePup',
+    '  503 Mon Sep 28 15:01:00 2026 ttys004  node /opt/homebrew/bin/claude -c',
+  ].join('\n');
+  const procs = t.parsePs(ps);
+  assert.deepEqual(procs.map((p) => [p.pid, p.tty]), [[501, 'ttys003'], [503, 'ttys004']]);
+  assert.ok(procs[0].startedAt > 0);
+  const s = { id: '1b2c3d4e-0000-4000-8000-123456789abc', cwd: '/w/study' };
+  assert.equal(
+    t.reopenCommand(s, procs[0].command),
+    "cd '/w/study' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude '--dangerously-skip-permissions' '--remote-control' 'study' '--resume' '1b2c3d4e-0000-4000-8000-123456789abc'"
+  );
+  assert.match(t.reopenCommand({ id: 'x', cwd: '/w' }, procs[1].command), /claude '--resume' 'x'$/); // -c 는 빼고 이 세션으로
+  const hub = hubWith();
+  hub.attach({ session_id: 'old', cwd: '/w/a', tty: 'ttys003', pid: 501, command: procs[0].command, needsReopen: true });
+  hub.attach({ session_id: 'new', cwd: '/w/b', tty: 'ttys004', pid: 503, command: procs[1].command });
+  assert.deepEqual(hub.needingReopen().map((x) => x.id), ['old']);
+  assert.equal(hub.list().find((x) => x.id === 'old').needsReopen, true);
+});
+
+test('알림 켜기: 훅이 한 번이라도 오면 알림이 켜진 세션', async () => {
+  const hub = hubWith();
+  hub.attach({ session_id: 'old', cwd: '/w/a', tty: 'ttys003', pid: 501, command: 'claude', needsReopen: true });
+  await hub.handle('UserPromptSubmit', { session_id: 'old', cwd: '/w/a', prompt: 'hi' });
+  assert.equal(hub.needingReopen().length, 0);
+});
+
 test('다시 열기 명령은 Claude 의 하위 세션 표시를 지우고 실행한다', () => {
   const { resumeCommand, cleanEnv } = require('../src/main/terminals');
   const cmd = resumeCommand({ id: 'abc', cwd: '/w/app' });

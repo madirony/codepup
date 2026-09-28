@@ -168,20 +168,110 @@ function sessionIdFromArgs(command) {
   return m ? m[1] : '';
 }
 
-// 지금 터미널에서 돌고 있는 claude 목록 [{ pid, tty, command }] (알 수 없으면 null)
+// 지금 터미널에서 돌고 있는 claude 목록 [{ pid, tty, command, startedAt }] (알 수 없으면 null)
+const LSTART = /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d+:\d+:\d+\s+\d{4})\s+(\S+)\s+(.*)$/;
+function parsePs(stdout) {
+  const out = [];
+  for (const line of String(stdout).split('\n')) {
+    const m = LSTART.exec(line);
+    if (!m || m[3] === '?' || m[3] === '??') continue;
+    if (!isInteractiveClaude(m[4])) continue;
+    const started = Date.parse(m[2]);
+    out.push({ pid: Number(m[1]), tty: m[3].replace(/^\/dev\//, ''), command: m[4], startedAt: Number.isFinite(started) ? started : 0 });
+  }
+  return out;
+}
+
 function runningClaudes() {
   return new Promise((resolve) => {
-    execFile('ps', ['-axo', 'pid=,tty=,command='], { timeout: 4000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+    execFile('ps', ['-axo', 'pid=,lstart=,tty=,command='], { timeout: 4000, maxBuffer: 8 * 1024 * 1024, env: { ...cleanEnv(), LC_ALL: 'C' } }, (err, stdout) => {
       if (err) return resolve(null);
-      const out = [];
-      for (const line of String(stdout).split('\n')) {
-        const m = /^\s*(\d+)\s+(\S+)\s+(.*)$/.exec(line);
-        if (!m || m[2] === '?' || m[2] === '??') continue;
-        if (isInteractiveClaude(m[3])) out.push({ pid: Number(m[1]), tty: m[2].replace(/^\/dev\//, ''), command: m[3] });
-      }
-      resolve(out);
+      resolve(parsePs(stdout));
     });
   });
+}
+
+// 원래 claude 명령의 옵션은 그대로 두고 세션만 --resume <id> 로 (예: --dangerously-skip-permissions --remote-control 이름)
+function reopenCommand(session, command) {
+  const tokens = String(command || '').trim().split(/\s+/);
+  const at = tokens.findIndex((t) => /(^|\/)claude$/.test(t));
+  const args = at >= 0 ? tokens.slice(at + 1) : [];
+  const kept = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--resume' || a === '-r' || a === '--session-id') {
+      if (args[i + 1] && !args[i + 1].startsWith('-')) i++;
+      continue;
+    }
+    if (/^(--resume|--session-id)=/.test(a) || a === '--continue' || a === '-c') continue;
+    kept.push(a);
+  }
+  kept.push('--resume', session.id);
+  return `cd ${shQuote(session.cwd || '~')} && env -u ${CHILD_MARKERS.join(' -u ')} claude ${kept.map(shQuote).join(' ')}`;
+}
+
+// 같은 터미널 탭(tty)에 명령 입력 (iTerm → Terminal 순서로 찾아봄)
+async function typeInTty(tty, cmd) {
+  const dev = tty.startsWith('/dev/') ? tty : `/dev/${tty}`;
+  const iterm = await osascript([
+    'if application "iTerm" is running then',
+    '  tell application "iTerm"',
+    '    repeat with w in windows',
+    '      repeat with t in tabs of w',
+    '        repeat with s in sessions of t',
+    `          if tty of s is ${asString(dev)} then`,
+    `            tell s to write text ${asString(cmd)}`,
+    '            return "ok"',
+    '          end if',
+    '        end repeat',
+    '      end repeat',
+    '    end repeat',
+    '  end tell',
+    'end if',
+    'return "missing"',
+  ]);
+  if (iterm.ok && iterm.out === 'ok') return iterm;
+  const term = await osascript([
+    'if application "Terminal" is running then',
+    '  tell application "Terminal"',
+    '    repeat with w in windows',
+    '      repeat with t in tabs of w',
+    `        if tty of t is ${asString(dev)} then`,
+    `          do script ${asString(cmd)} in t`,
+    '          return "ok"',
+    '        end if',
+    '      end repeat',
+    '    end repeat',
+    '  end tell',
+    'end if',
+    'return "missing"',
+  ]);
+  if (term.ok && term.out === 'ok') return term;
+  return { ok: false, error: '그 터미널 탭을 찾지 못했어요 (iTerm · macOS 터미널만 지원)' };
+}
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// 같은 탭에서 claude 를 끝내고 곧바로 이어서 다시 열기 → 새로 연 세션은 CodePup 훅을 읽어서 알림이 와요
+async function reopenInPlace(session, proc) {
+  if (process.platform !== 'darwin') return { ok: false, error: 'macOS 에서만 지원해요' };
+  const cmd = reopenCommand(session, proc.command);
+  try {
+    process.kill(proc.pid, 'SIGTERM'); // claude 는 대화 기록을 저장하고 끝나요
+  } catch (err) {
+    return { ok: false, error: `끝내지 못했어요: ${err.message}` };
+  }
+  for (let i = 0; i < 25 && alive(proc.pid); i++) await new Promise((r) => setTimeout(r, 200));
+  if (alive(proc.pid)) return { ok: false, error: '아직 끝나지 않았어요. 잠시 뒤 다시 해 주세요' };
+  await new Promise((r) => setTimeout(r, 400)); // 셸 프롬프트가 돌아올 때까지
+  return typeInTty(proc.tty, cmd);
 }
 
 // 프로세스의 작업 폴더 (macOS lsof)
@@ -201,4 +291,4 @@ async function aliveClaudeTtys(procs) {
   return list ? new Set(list.map((p) => p.tty)) : null;
 }
 
-module.exports = { focusSession, openSessions, resumeCommand, aliveClaudeTtys, runningClaudes, cwdOf, isInteractiveClaude, sessionIdFromArgs, cleanEnv, shQuote, asString, APPS };
+module.exports = { focusSession, openSessions, resumeCommand, reopenCommand, reopenInPlace, aliveClaudeTtys, runningClaudes, parsePs, cwdOf, isInteractiveClaude, sessionIdFromArgs, cleanEnv, shQuote, asString, APPS };

@@ -172,6 +172,8 @@ class PetTray {
       items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}`.slice(0, 60), click: act('open-panel', { sessionId: s.id }) });
     }
     if (list.length > MENU_MAX) items.push({ label: `     … 외 ${list.length - MENU_MAX}개 (보드에서 보기)`, click: act('open-panel') });
+    const muted = list.filter((s) => s.needsReopen).length;
+    if (muted) items.push({ label: `🔕  알림 꺼진 세션 ${muted}개 → 다시 열어서 알림 켜기`, click: act('reopen-hooks', {}) });
     const aw = this.state.awake || {};
     let awakeText = '☕  잠자기 방지 꺼짐';
     if (aw.active && aw.manual) awakeText = '☕  계속 깨어 있는 중 (직접 켬)';
