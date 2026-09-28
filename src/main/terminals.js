@@ -135,12 +135,21 @@ function terminalTabScript(cmd) {
   ];
 }
 
+function hasITerm() {
+  const fs = require('fs');
+  const os = require('os');
+  return ['/Applications/iTerm.app', `${os.homedir()}/Applications/iTerm.app`].some((p) => fs.existsSync(p));
+}
+
 async function openSessions(sessions, opts = {}) {
   const results = [];
   const tabs = opts.tabs !== false;
   for (const s of sessions) {
     const cmd = resumeCommand(s, opts);
-    const useITerm = opts.terminal === 'iTerm' || (opts.terminal !== 'Terminal' && s.term === 'iTerm.app');
+    // 어떤 터미널이었는지 모르면(연결 전에 연 세션 등) iTerm 이 깔려 있으면 iTerm 으로
+    const useITerm =
+      opts.terminal === 'iTerm' ||
+      (opts.terminal !== 'Terminal' && (s.term === 'iTerm.app' || (s.term !== 'Apple_Terminal' && hasITerm())));
     let r;
     if (useITerm) r = await osascript(iTermScript(cmd, tabs));
     else if (tabs) {
