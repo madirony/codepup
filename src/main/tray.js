@@ -27,7 +27,7 @@ class PetTray {
     this.sleepFrame = fallback;
     this.frameIndex = 0;
     this.animTimer = null;
-    this.state = { stats: null, pet: null, settings: null, sessions: null, limits: null, awake: null };
+    this.state = { stats: null, pet: null, settings: null, sessions: null, awake: null };
     // macOS는 setContextMenu 만으로 클릭 시 메뉴가 열리고, Windows는 왼쪽 클릭도 메뉴를 열도록
     if (process.platform !== 'darwin') this.tray.on('click', () => this.tray.popUpContextMenu());
     this.scheduleFrame();
@@ -83,11 +83,6 @@ class PetTray {
       else if (c.working) parts.push(`⚙️${c.working}`);
     }
     if (this.state.awake && this.state.awake.active) parts.push('☕');
-    const lim = this.state.limits;
-    if (t.limits !== false && lim) {
-      if (lim.five_hour) parts.push(`5h ${Math.round(lim.five_hour.pct)}%`);
-      if (lim.seven_day) parts.push(`주 ${Math.round(lim.seven_day.pct)}%`);
-    }
     if (t.cpu) parts.push(`CPU ${stats.cpu}%`);
     if (t.mem) parts.push(`MEM ${stats.mem.percent}%`);
     if (t.disk && stats.disk) parts.push(`SSD ${stats.disk.percent}%`);
@@ -150,7 +145,6 @@ class PetTray {
           { label: '저장공간', type: 'checkbox', checked: settings.tray.disk, click: toggleTray('disk') },
           { label: '배터리', type: 'checkbox', checked: settings.tray.battery, click: toggleTray('battery') },
           { label: 'Claude 세션 알림 개수', type: 'checkbox', checked: settings.tray.sessions !== false, click: toggleTray('sessions') },
-          { label: 'Claude 요금제 한도 (5시간 · 주간)', type: 'checkbox', checked: settings.tray.limits !== false, click: toggleTray('limits') },
           { type: 'separator' },
           { label: '아이콘 달리기 애니메이션', type: 'checkbox', checked: settings.tray.animate, click: toggleTray('animate') },
         ],
@@ -173,17 +167,8 @@ class PetTray {
       s.pending && s.pending.kind === 'permission' ? '🔔' : s.pending && s.pending.kind === 'reply' ? '💬' : s.status === 'working' ? '⚙️' : s.status === 'done' ? '✅' : '💤';
     items.push({ label: `🗂  세션 보드 열기${list.length ? `  (${list.length})` : ''}`, click: act('open-panel'), accelerator: 'CommandOrControl+Shift+J' });
     for (const s of list.slice(0, 8)) {
-      const ctx = s.context ? `  · 컨텍스트 ${s.context.pct}%` : '';
-      items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}${ctx}`.slice(0, 80), click: act('open-panel', { sessionId: s.id }) });
+      items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}`.slice(0, 80), click: act('open-panel', { sessionId: s.id }) });
     }
-    const lim = this.state.limits;
-    const left = (at) => {
-      const sec = Math.max(0, Math.round(at - Date.now() / 1000));
-      const h = Math.floor(sec / 3600);
-      return h >= 24 ? `${Math.floor(h / 24)}일 ${h % 24}시간` : `${h}시간 ${Math.floor((sec % 3600) / 60)}분`;
-    };
-    if (lim && lim.five_hour) items.push({ label: `⏳  5시간 한도  ${bar(lim.five_hour.pct)}  ${Math.round(lim.five_hour.pct)}%  · ${left(lim.five_hour.resetsAt)} 뒤 초기화`, enabled: false });
-    if (lim && lim.seven_day) items.push({ label: `📅  주간 한도  ${bar(lim.seven_day.pct)}  ${Math.round(lim.seven_day.pct)}%  · ${left(lim.seven_day.resetsAt)} 뒤 초기화`, enabled: false });
     const aw = this.state.awake || {};
     let awakeText = '☕  잠자기 방지 꺼짐';
     if (aw.active && aw.manual) awakeText = '☕  계속 깨어 있는 중 (직접 켬)';

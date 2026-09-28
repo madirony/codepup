@@ -55,7 +55,7 @@ const DEFAULT_SETTINGS = {
   showOnFullscreen: false,
   launchAtLogin: false,
   hidden: false,
-  tray: { cpu: true, mem: false, disk: false, battery: false, animate: true, sessions: true, limits: true },
+  tray: { cpu: true, mem: false, disk: false, battery: false, animate: true, sessions: true },
   keepAwake: true, // ☕ Claude 가 일하는 동안 맥이 잠들지 않게
   keepAwakeMode: 'open', // 'open' = 세션이 열려 있으면(원격 작업용) · 'working' = 일할 때만
   keepAwakeManual: false, // 계속 깨어 있기 (앱을 다시 켜도 유지)

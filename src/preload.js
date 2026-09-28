@@ -19,7 +19,6 @@ contextBridge.exposeInMainWorld('codepup', {
   onSessions: listen('sessions:changed'),
   onClaudeStatus: listen('claude:status'),
   onPanelFocus: listen('panel:focus'),
-  onLimits: listen('limits:changed'),
   onAwake: listen('awake:changed'),
 
   // 펫 창

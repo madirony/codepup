@@ -213,47 +213,6 @@ main {
 .chip.idle,
 .chip.waiting { background: #9a8a92; }
 
-.limits {
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px 0;
-}
-
-.limit {
-  flex: 1;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.meter {
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(127, 127, 127, 0.15);
-  overflow: hidden;
-  margin-top: 3px;
-}
-
-.meter > div {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--ok);
-}
-
-.meter.warn > div {
-  background: var(--warn);
-}
-
-.meter.danger > div {
-  background: var(--accent);
-}
-
-.ctx {
-  margin-top: 5px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
 .name {
   font-weight: 800;
   font-size: 14px;

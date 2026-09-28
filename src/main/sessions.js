@@ -60,8 +60,6 @@ class SessionHub extends EventEmitter {
     this.history = Array.isArray(history) ? history.slice(0, HISTORY_MAX) : [];
     this.shares = new Map(); // targetId -> [{ fromName, text }]
     this.seq = 0;
-    this.limits = null; // 최근 상태 표시줄의 요금제 한도 { five_hour, seven_day, at }
-    this.alerted = {}; // 한도 · 컨텍스트 알림을 한 번씩만 보내기 위한 기록
   }
 
   // ---------- 조회 ----------
@@ -84,10 +82,6 @@ class SessionHub extends EventEmitter {
       updatedAt: s.updatedAt,
       term: s.term,
       tty: s.tty,
-      context: s.context || null, // { pct, size }
-      model: s.model || '',
-      costUsd: s.costUsd || 0,
-      live: !!s.statusAt, // 상태 표시줄로 살아 있음을 확인한 세션
       pending: s.pending ? { ...s.pending, resolve: undefined, timer: undefined } : null,
       sharedQueued: (this.shares.get(s.id) || []).length,
     };
@@ -319,73 +313,7 @@ class SessionHub extends EventEmitter {
     };
   }
 
-  // ---------- 상태 표시줄 (이미 열린 세션 발견 · 한도 · 컨텍스트) ----------
-
-  /**
-   * Claude Code 상태 표시줄이 몇 초마다 보내 주는 JSON 을 반영합니다.
-   * 훅 이벤트가 없어도 열려 있는 세션을 찾고, 요금제 한도와 컨텍스트 사용률을 추적해요.
-   */
-  status(payload, meta = {}) {
-    if (!payload || typeof payload.session_id !== 'string' || !payload.session_id) return;
-    const isNew = !this.sessions.has(payload.session_id);
-    const cwd = payload.cwd || (payload.workspace && payload.workspace.current_dir) || '';
-    const s = this.upsert({ session_id: payload.session_id, cwd, transcript_path: payload.transcript_path }, {}, { touch: isNew });
-    s.statusAt = this.now();
-    if (meta.tty && meta.tty !== s.tty) s.tty = meta.tty;
-    let changed = isNew;
-    const cw = payload.context_window || {};
-    if (Number.isFinite(cw.used_percentage)) {
-      const pct = Math.round(cw.used_percentage);
-      if (!s.context || s.context.pct !== pct) changed = true;
-      s.context = { pct, size: cw.context_window_size || 0 };
-      this.contextAlert(s);
-    }
-    const model = payload.model && (payload.model.display_name || payload.model.id);
-    if (model && model !== s.model) {
-      s.model = model;
-      changed = true;
-    }
-    if (payload.cost && Number.isFinite(payload.cost.total_cost_usd)) s.costUsd = payload.cost.total_cost_usd;
-    if (isNew) s.activity = '열려 있는 세션';
-    if (changed) this.changed(s, { type: isNew ? 'discovered' : 'status' });
-    if (payload.rate_limits && typeof payload.rate_limits === 'object') this.updateLimits(payload.rate_limits);
-  }
-
-  updateLimits(rl) {
-    const pick = (w) => (w && Number.isFinite(w.used_percentage) ? { pct: Math.round(w.used_percentage * 10) / 10, resetsAt: Number(w.resets_at) || 0 } : null);
-    const next = { five_hour: pick(rl.five_hour), seven_day: pick(rl.seven_day), at: this.now() };
-    const prev = this.limits;
-    this.limits = next;
-    const same = prev && JSON.stringify([prev.five_hour, prev.seven_day]) === JSON.stringify([next.five_hour, next.seven_day]);
-    if (!same) this.emit('limits', { limits: next, alert: this.limitAlert(next) });
-  }
-
-  // 한도가 50 · 80 · 95% 를 처음 넘을 때 한 번씩 알림 (초기화되면 다시)
-  limitAlert(l) {
-    const w = l.five_hour;
-    if (!w) return null;
-    const key = `5h:${w.resetsAt}`;
-    const level = [95, 80, 50].find((t) => w.pct >= t);
-    if (!level) return null;
-    if ((this.alerted[key] || 0) >= level) return null;
-    this.alerted[key] = level;
-    return { window: 'five_hour', level, pct: w.pct, resetsAt: w.resetsAt };
-  }
-
-  contextAlert(s) {
-    const pct = s.context.pct;
-    const key = `ctx:${s.id}`;
-    if (pct < 60) {
-      delete this.alerted[key]; // 압축(compact)되면 다시 알릴 수 있게
-      return;
-    }
-    if (pct >= 85 && !this.alerted[key]) {
-      this.alerted[key] = true;
-      this.changed(s, { type: 'context', pct });
-    }
-  }
-
-  // 대화 기록 파일로 찾은 세션 (설정을 실시간으로 다시 읽지 않는 옛 버전용)
+  // 대화 기록 파일로 찾은 세션 (CodePup 을 켜기 전부터 열려 있던 세션 등)
   observe({ session_id, cwd, transcript_path, mtime }) {
     if (!session_id || !cwd) return;
     const isNew = !this.sessions.has(session_id);
@@ -404,7 +332,7 @@ class SessionHub extends EventEmitter {
     const t = this.now();
     for (const s of [...this.sessions.values()]) {
       if (s.pending || s.status === 'working' || s.status === 'permission') continue;
-      const lastSignal = Math.max(s.statusAt || 0, s.updatedAt || 0);
+      const lastSignal = s.updatedAt || 0;
       const tty = String(s.tty || '').replace(/^\/dev\//, '');
       const gone = aliveTtys && tty ? !aliveTtys.has(tty) && t - lastSignal > graceMs : t - lastSignal > idleTimeoutMs;
       if (gone) {

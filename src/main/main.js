@@ -468,26 +468,6 @@ async function restoreSessions(ids) {
   return failed.length ? { ok: false, error: failed[0].error, opened: results.length - failed.length } : { ok: true, opened: results.length };
 }
 
-function fmtLeft(resetsAt) {
-  const sec = Math.max(0, Math.round(resetsAt - Date.now() / 1000));
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h >= 24) return `${Math.floor(h / 24)}일 ${h % 24}시간`;
-  return h ? `${h}시간 ${m}분` : `${m}분`;
-}
-
-function onLimits({ limits, alert }) {
-  sendToAll('limits:changed', limits);
-  if (tray) tray.update({ limits });
-  if (alert) {
-    const msg =
-      alert.level >= 95
-        ? `5시간 한도 ${Math.round(alert.pct)}%! 거의 다 썼어요… ${fmtLeft(alert.resetsAt)} 뒤 초기화`
-        : `5시간 한도 ${Math.round(alert.pct)}% 썼어요. ${fmtLeft(alert.resetsAt)} 뒤 초기화돼요`;
-    sendCommand('say', { text: `⏳ ${msg}`, tex: alert.level >= 80 ? 'worry' : 'surprised' });
-  }
-}
-
 function evaluateAwake() {
   if (!awake) return;
   awake.configure({ auto: store.settings.keepAwake, manual: store.settings.keepAwakeManual, mode: store.settings.keepAwakeMode });
@@ -645,7 +625,6 @@ function registerIpc() {
     skins: skins.list(),
     skin: skins.get(store.settings.skin),
     sessions: { list: hub.list(), counts: hub.counts(), restorable: hub.restorable() },
-    limits: hub.limits,
     awake: awake ? awake.state() : null,
     claude: claudeStatus(),
     origin: ORIGIN,
@@ -824,7 +803,6 @@ app.whenReady().then(async () => {
 
   hub = new SessionHub({ getSettings: () => store.settings, history: store.sessionsHistory });
   hub.on('changed', onHubChanged);
-  hub.on('limits', onLimits);
   bridge = new Bridge({ hub, onError: (err) => console.error('[bridge]', err) });
   awake = new KeepAwake({ blocker: powerSaveBlocker });
   awake.on('changed', onAwakeChanged);

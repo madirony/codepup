@@ -56,38 +56,8 @@ OUT=$(curl -s --max-time "$MAXT" -X POST \\
 exit 0
 `;
 
-// 상태 표시줄: 받은 JSON 을 CodePup 에 넘기고, 원래 쓰던 상태 표시줄 명령이 있으면 그대로 실행해서 보여 줘요.
+// 예전 버전(2.5.1 이하)이 상태 표시줄을 가로채 사용량을 받던 흔적. 지금은 쓰지 않고, 보이면 원래 설정으로 되돌려요.
 const STATUSLINE_MARKER = 'codepup-statusline.sh';
-const STATUSLINE_SCRIPT = `#!/bin/sh
-# CodePup 상태 표시줄 연결 (CodePup 이 설치함 · 연결을 해제하면 원래 설정으로 돌아가요)
-# 로컬(127.0.0.1)로만 보내요. Anthropic API 는 부르지 않아요.
-IN=$(cat)
-CONF="$HOME/.codepup/bridge.env"
-if [ -r "$CONF" ]; then
-  . "$CONF"
-  if [ -n "$CODEPUP_PORT" ]; then
-    TTY=""
-    P=$PPID
-    i=0
-    while [ $i -lt 5 ] && [ -n "$P" ] && [ "$P" != "1" ]; do
-      T=$(ps -o tty= -p "$P" 2>/dev/null | tr -d ' ')
-      case "$T" in ""|"?"|"??") ;; *) TTY="$T"; break ;; esac
-      P=$(ps -o ppid= -p "$P" 2>/dev/null | tr -d ' ')
-      i=$((i + 1))
-    done
-    printf '%s' "$IN" | curl -s --max-time 2 -X POST \\
-      -H "Authorization: Bearer $CODEPUP_TOKEN" -H "Content-Type: application/json" \\
-      -H "X-CodePup-TTY: $TTY" \\
-      --data-binary @- "http://127.0.0.1:$CODEPUP_PORT/status" >/dev/null 2>&1 &
-  fi
-fi
-PREV="$HOME/.codepup/statusline-prev.sh"
-if [ -r "$PREV" ]; then
-  printf '%s' "$IN" | sh "$PREV"
-else
-  printf '🐶 CodePup'
-fi
-`;
 
 class Bridge {
   constructor({ hub, homeDir = os.homedir(), onError = () => {} }) {
@@ -142,9 +112,8 @@ class Bridge {
     if (auth.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
       return send(401, { error: 'unauthorized' });
     }
-    const isStatus = req.url === '/status';
     const m = /^\/hook\/([A-Za-z]+)$/.exec(req.url || '');
-    if (req.method !== 'POST' || (!m && !isStatus)) return send(404, { error: 'not found' });
+    if (req.method !== 'POST' || !m) return send(404, { error: 'not found' });
 
     let size = 0;
     const chunks = [];
@@ -159,14 +128,6 @@ class Bridge {
         payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
       } catch {
         return send(400, { error: 'bad json' });
-      }
-      if (isStatus) {
-        try {
-          this.hub.status(payload, { tty: String(req.headers['x-codepup-tty'] || '').slice(0, 40) });
-        } catch (err) {
-          this.onError(err);
-        }
-        return send(200, null);
       }
       // 훅이 취소되면(터미널에서 먼저 답했거나 타임아웃) 대기도 함께 정리
       const ac = new AbortController();
@@ -201,7 +162,7 @@ class Bridge {
   isInstalled() {
     try {
       const s = this.readClaudeSettings();
-      return HOOK_EVENTS.every(({ event }) => JSON.stringify((s.hooks || {})[event] || []).includes(MARKER)) && this.isOurStatusLine(s.statusLine);
+      return HOOK_EVENTS.every(({ event }) => JSON.stringify((s.hooks || {})[event] || []).includes(MARKER));
     } catch {
       return false;
     }
@@ -216,7 +177,7 @@ class Bridge {
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     fs.writeFileSync(this.scriptFile, HOOK_SCRIPT, { mode: 0o755 });
     const settings = this.stripOurs(this.readClaudeSettings());
-    this.installStatusLine(settings);
+    this.restoreStatusLine(settings);
     settings.hooks = settings.hooks || {};
     for (const h of HOOK_EVENTS) {
       const hook = { type: 'command', command: this.hookCommand(h.event) };
@@ -228,10 +189,15 @@ class Bridge {
     return true;
   }
 
-  // 앱이 켜질 때: 이미 연결돼 있으면 스크립트와 설정을 이 버전으로 갱신 (예전 5초 새로고침 제거 등)
+  // 앱이 켜질 때: 이미 연결돼 있으면 스크립트와 설정을 이 버전으로 갱신
+  // (예전 버전이 가로챈 상태 표시줄은 원래 것 · 예: claude-hud 로 되돌림)
   refresh() {
-    if (!this.isInstalled()) return false;
-    return this.install();
+    if (this.isInstalled()) return this.install();
+    const settings = this.readClaudeSettings();
+    if (!this.isOurStatusLine(settings.statusLine)) return false;
+    this.restoreStatusLine(settings);
+    this.writeClaudeSettings(settings);
+    return true;
   }
 
   uninstall() {
@@ -243,25 +209,6 @@ class Bridge {
 
   isOurStatusLine(sl) {
     return !!(sl && String(sl.command || '').includes(STATUSLINE_MARKER));
-  }
-
-  // 원래 상태 표시줄(예: claude-hud)은 기억해 두고, 우리 스크립트가 그 명령을 이어서 실행
-  installStatusLine(settings) {
-    fs.writeFileSync(this.statusScript, STATUSLINE_SCRIPT, { mode: 0o755 });
-    const prev = settings.statusLine;
-    if (prev && !this.isOurStatusLine(prev)) {
-      fs.writeFileSync(this.prevStatusJson, JSON.stringify(prev, null, 2));
-      if (prev.type === 'command' && prev.command) {
-        fs.writeFileSync(this.prevStatusScript, `#!/bin/sh\n# 원래 쓰던 상태 표시줄 명령\n${prev.command}\n`, { mode: 0o755 });
-      }
-    }
-    const saved = this.readPrevStatusLine();
-    // 새로고침 주기는 강제하지 않아요 (원래 설정을 그대로). 주기를 짧게 두면 이어서 실행되는
-    // claude-hud 같은 명령이 세션마다 사용량을 자꾸 조회해서 429 (rate limited) 가 날 수 있어요.
-    const ours = { type: 'command', command: `sh "${this.statusScript}"` };
-    if (saved && Number.isFinite(saved.padding)) ours.padding = saved.padding;
-    if (saved && Number.isFinite(saved.refreshInterval)) ours.refreshInterval = saved.refreshInterval;
-    settings.statusLine = ours;
   }
 
   readPrevStatusLine() {
@@ -277,7 +224,7 @@ class Bridge {
     const saved = this.readPrevStatusLine();
     if (saved) settings.statusLine = saved;
     else delete settings.statusLine;
-    for (const f of [this.prevStatusJson, this.prevStatusScript]) {
+    for (const f of [this.prevStatusJson, this.prevStatusScript, this.statusScript]) {
       try {
         fs.unlinkSync(f);
       } catch {
@@ -316,4 +263,4 @@ class Bridge {
   }
 }
 
-module.exports = { Bridge, HOOK_EVENTS, HOOK_SCRIPT, MARKER, STATUSLINE_SCRIPT, STATUSLINE_MARKER };
+module.exports = { Bridge, HOOK_EVENTS, HOOK_SCRIPT, MARKER, STATUSLINE_MARKER };

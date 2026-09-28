@@ -8,7 +8,6 @@
   let sessions = boot.sessions.list;
   let restorable = boot.sessions.restorable;
   let claude = boot.claude;
-  let limits = boot.limits;
   const drafts = new Map(); // 세션별 작성 중인 답장
   let focusId = decodeURIComponent(location.hash.slice(1)) || null;
   const $ = (id) => document.getElementById(id);
@@ -78,11 +77,6 @@
     top.append(el('span', `chip ${cls}`, label), el('span', 'name', s.name), el('span', 'ago', ago(s.updatedAt)));
     c.append(top, el('div', 'cwd', shortPath(s.cwd)));
     if (s.activity && !s.pending) c.append(el('div', 'activity', s.activity));
-    if (s.context) {
-      const ctx = el('div', 'ctx', `컨텍스트 ${s.context.pct}%${s.model ? ` · ${s.model}` : ''}${s.costUsd ? ` · $${s.costUsd.toFixed(2)}` : ''}`);
-      ctx.append(meter(s.context.pct));
-      c.append(ctx);
-    }
 
     if (s.pending && s.pending.kind === 'permission') {
       const box = el('div', 'ask');
@@ -144,34 +138,6 @@
     return c;
   }
 
-  function meter(pct) {
-    const m = el('div', 'meter' + (pct >= 85 ? ' danger' : pct >= 60 ? ' warn' : ''));
-    const fill = el('div');
-    fill.style.width = `${Math.min(100, pct)}%`;
-    m.append(fill);
-    return m;
-  }
-
-  function left(at) {
-    const sec = Math.max(0, Math.round(at - Date.now() / 1000));
-    const h = Math.floor(sec / 3600);
-    return h >= 24 ? `${Math.floor(h / 24)}일 ${h % 24}시간` : `${h}시간 ${Math.floor((sec % 3600) / 60)}분`;
-  }
-
-  function renderLimits() {
-    const box = $('limits');
-    const items = [];
-    for (const [key, label] of [['five_hour', '5시간'], ['seven_day', '주간']]) {
-      const w = limits && limits[key];
-      if (!w) continue;
-      const d = el('div', 'limit', `${label} ${Math.round(w.pct)}% · ${left(w.resetsAt)} 뒤`);
-      d.title = `${label} 한도 ${w.pct}% 사용 · ${left(w.resetsAt)} 뒤 초기화`;
-      d.append(meter(w.pct));
-      items.push(d);
-    }
-    box.replaceChildren(...items);
-    box.classList.toggle('hidden', !items.length);
-  }
 
   // ---------- 동작 ----------
 
@@ -212,7 +178,6 @@
     $('summary').textContent = sessions.length
       ? `세션 ${sessions.length}개 · ${waiting ? `🔔 ${waiting}개가 기다려요` : working ? `⚙️ ${working}개 작업 중` : '모두 한가해요'}`
       : 'Claude Code 세션을 시작하면 여기에 나타나요';
-    renderLimits();
     $('away').checked = !!settings.awayMode;
     $('away').closest('.away').classList.toggle('on', !!settings.awayMode);
     $('connect').classList.toggle('hidden', !!(claude && claude.installed));
@@ -311,10 +276,6 @@
   api.onSkins((p) => {
     skin = p.active;
     render();
-  });
-  api.onLimits((l) => {
-    limits = l;
-    renderLimits();
   });
   api.onClaudeStatus((c) => {
     claude = c;

@@ -10,6 +10,14 @@ fs.mkdirSync(OUT, { recursive: true });
 const HOME = path.join(OUT, 'home');
 fs.mkdirSync(HOME, { recursive: true });
 process.env.HOME = HOME;
+// 원래 쓰던 상태 표시줄(claude-hud 같은) · CodePup 을 켜기 전부터 열려 있던 세션의 대화 기록
+const HUD = { type: 'command', command: 'node ~/hud/index.js' };
+fs.mkdirSync(path.join(HOME, '.claude', 'projects', '-Users-me-work-already-open'), { recursive: true });
+fs.writeFileSync(path.join(HOME, '.claude', 'settings.json'), JSON.stringify({ statusLine: HUD }));
+fs.writeFileSync(
+  path.join(HOME, '.claude', 'projects', '-Users-me-work-already-open', 'sess-open.jsonl'),
+  JSON.stringify({ type: 'user', sessionId: 'sess-open', cwd: '/Users/me/work/already-open', message: { content: 'hi' } }) + '\n'
+);
 
 const { app, BrowserWindow, dialog } = require('electron');
 app.setPath('userData', path.join(OUT, 'userData'));
@@ -93,29 +101,11 @@ app.whenReady().then(async () => {
   await hook('UserPromptSubmit', { ...s1, prompt: '로그인 API 만들어 줘' });
   await wait(500);
 
-  // 2-2) 이미 열려 있던 세션: 훅 이벤트 없이 상태 표시줄만으로 발견 + 한도 · 컨텍스트
+  // 2-2) 이미 열려 있던 세션: 대화 기록 파일로 발견 · 상태 표시줄은 건드리지 않음
   const cc = JSON.parse(fs.readFileSync(settingsJson, 'utf8'));
-  check('연결하면 상태 표시줄도 설치된다', cc.statusLine && cc.statusLine.command.includes('codepup-statusline.sh'));
-  const statusline = (payload) =>
-    new Promise((resolve, reject) => {
-      const child = execFile('sh', ['-c', cc.statusLine.command], { env: { ...process.env, HOME } }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
-      child.stdin.end(JSON.stringify(payload));
-    });
-  const openPayload = (pct5h) => ({
-    session_id: 'sess-open', cwd: '/Users/me/work/already-open', transcript_path: '/tmp/o.jsonl',
-    model: { display_name: 'Opus' }, context_window: { used_percentage: 37, context_window_size: 1000000 },
-    rate_limits: { five_hour: { used_percentage: pct5h, resets_at: Math.round(Date.now() / 1000) + 7200 }, seven_day: { used_percentage: 41, resets_at: Math.round(Date.now() / 1000) + 3 * 86400 } },
-  });
-  const slOut = await statusline(openPayload(23));
-  check('상태 표시줄에 CodePup 표시가 나온다', slOut.includes('CodePup'), slOut);
-  await wait(800);
+  check('쓰던 상태 표시줄(claude-hud 등)은 그대로 둔다', JSON.stringify(cc.statusLine) === JSON.stringify(HUD), JSON.stringify(cc.statusLine));
   const openS = (await run(`window.codepup.sessions()`)).list.find((x) => x.id === 'sess-open');
-  check('이미 열린 세션이 훅 없이도 보드에 뜬다', openS && openS.live && openS.context.pct === 37, JSON.stringify(openS && openS.context));
-  await statusline(openPayload(82));
-  await wait(800);
-  const limitBubble = await run(`document.querySelector('#bubble').innerText`);
-  check('5시간 한도 80% 를 넘으면 펫이 알려 준다', limitBubble.includes('5시간 한도 82%'), limitBubble);
-  await shot(pet, '02b-limit.png');
+  check('이미 열린 세션이 훅 없이도 보드에 뜬다', !!openS, JSON.stringify((await run(`window.codepup.sessions()`)).list.map((x) => x.id)));
 
   const awakeState = await run('window.codepup.init().then((b) => b.awake)');
   check('☕ Claude 세션이 있으면 잠자기 방지가 켜진다', awakeState && awakeState.active && awakeState.reason, JSON.stringify(awakeState));
@@ -162,8 +152,6 @@ app.whenReady().then(async () => {
   check('세션 보드가 열린다', !!panel);
   const cards = await panel.webContents.executeJavaScript(`[...document.querySelectorAll('.card')].map(c => c.innerText.split('\\n')[0] + ' ' + c.querySelector('.name').textContent)`);
   check('보드에 세션 3개 (이미 열린 세션 포함)', cards.length === 3, cards.join(' | '));
-  const limitText = await panel.webContents.executeJavaScript(`document.querySelector('#limits').innerText`);
-  check('보드 위쪽에 5시간 · 주간 한도가 보인다', limitText.includes('5시간 82%') && limitText.includes('주간 41%'), limitText.replace(/\n/g, ' / '));
   await shot(panel, '04-panel-reply.png');
   await panel.webContents.executeJavaScript(`(() => { const ta = document.querySelector('.card[data-id="sess-web"] textarea'); ta.value = '회원가입 화면도 같은 스타일로 만들어 줘'; ta.dispatchEvent(new Event('input')); document.querySelector('.card[data-id="sess-web"] button.primary').click(); })()`);
   const replyOut = await Promise.race([replyP, wait(5000).then(() => 'timeout')]);

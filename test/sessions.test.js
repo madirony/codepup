@@ -188,65 +188,12 @@ test('설치기: 이전 이름(Speaki)으로 설치된 훅도 정리한다', () 
 const { STATUSLINE_MARKER } = require('../src/main/bridge');
 const { parseTail, scanActive } = require('../src/main/transcripts');
 
-const statusPayload = (extra = {}) => ({
-  session_id: 'open-1',
-  cwd: '/Users/me/work/already-open',
-  transcript_path: '/tmp/o.jsonl',
-  model: { id: 'claude-sonnet-5', display_name: 'Sonnet' },
-  context_window: { used_percentage: 42, context_window_size: 1000000 },
-  cost: { total_cost_usd: 0.52 },
-  rate_limits: { five_hour: { used_percentage: 23.5, resets_at: 1790000000 }, seven_day: { used_percentage: 41.2, resets_at: 1790500000 } },
-  ...extra,
-});
-
-test('상태 표시줄: 이미 열린 세션을 찾고 컨텍스트 · 한도를 기록한다', () => {
-  const hub = hubWith();
-  const events = [];
-  const limits = [];
-  hub.on('changed', (e) => events.push(e.event.type));
-  hub.on('limits', (l) => limits.push(l));
-  hub.status(statusPayload());
-  const [s] = hub.list();
-  assert.equal(s.name, 'already-open');
-  assert.equal(s.live, true);
-  assert.deepEqual(s.context, { pct: 42, size: 1000000 });
-  assert.equal(s.model, 'Sonnet');
-  assert.equal(events[0], 'discovered');
-  assert.equal(hub.limits.five_hour.pct, 23.5);
-  assert.equal(limits.length, 1);
-  // 같은 값이 다시 오면 조용히
-  hub.status(statusPayload());
-  assert.equal(events.length, 1);
-  assert.equal(limits.length, 1);
-});
-
-test('상태 표시줄: 한도 50 · 80 · 95% 를 넘을 때 한 번씩만 알린다', () => {
-  const hub = hubWith();
-  const alerts = [];
-  hub.on('limits', (l) => l.alert && alerts.push(l.alert.level));
-  for (const pct of [30, 55, 60, 81, 85, 96, 97]) {
-    hub.status(statusPayload({ rate_limits: { five_hour: { used_percentage: pct, resets_at: 1790000000 } } }));
-  }
-  assert.deepEqual(alerts, [50, 80, 95]);
-  // 창이 초기화되면(resets_at 변경) 다시 알림
-  hub.status(statusPayload({ rate_limits: { five_hour: { used_percentage: 52, resets_at: 1790018000 } } }));
-  assert.deepEqual(alerts, [50, 80, 95, 50]);
-});
-
-test('상태 표시줄: 컨텍스트 85% 를 넘으면 한 번 알리고, 압축 후 다시 알릴 수 있다', () => {
-  const hub = hubWith();
-  const ctx = [];
-  hub.on('changed', (e) => e.event.type === 'context' && ctx.push(e.event.pct));
-  for (const pct of [70, 86, 90, 20, 88]) hub.status(statusPayload({ context_window: { used_percentage: pct } }));
-  assert.deepEqual(ctx, [86, 88]);
-});
-
-test('정리: claude 가 돌던 터미널이 닫힌 세션만 닫힌 세션으로 옮긴다', () => {
+test('정리: claude 가 돌던 터미널이 닫힌 세션만 닫힌 세션으로 옮긴다', async () => {
   let t = 1_000_000;
   const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
-  hub.status(statusPayload(), { tty: 'ttys003' });
-  hub.status(statusPayload({ session_id: 'quiet', cwd: '/w/quiet' }));
-  t += 30 * 60000; // 30분 동안 조용해도 (새로고침 주기가 없으면 신호가 안 옴)
+  await hub.handle('SessionStart', { session_id: 'open-1', cwd: '/w/app' }, { tty: 'ttys003' });
+  hub.observe({ session_id: 'quiet', cwd: '/w/quiet', mtime: t }); // tty 를 모르는 세션
+  t += 30 * 60000; // 30분 동안 조용해도
   hub.sweep({ aliveTtys: new Set(['ttys003']) });
   assert.equal(hub.list().length, 2);
   hub.sweep({ aliveTtys: new Set() }); // 터미널 창을 닫음
@@ -284,34 +231,34 @@ test('대화 기록 파일로 열린 세션을 찾는다', () => {
   assert.equal(scanActive({ home, now: Date.now() + 10 * 60000 }).length, 0);
 });
 
-test('설치기: 쓰던 상태 표시줄(claude-hud 등)은 이어서 실행하고, 해제하면 되돌린다', async () => {
+test('설치기: 상태 표시줄은 건드리지 않고, 예전 버전이 가로챈 것은 원래대로 되돌린다', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codepup-home-'));
   const file = path.join(home, '.claude', 'settings.json');
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const hud = { type: 'command', command: 'echo "[HUD] $(cat | wc -c)"', padding: 1 };
+  const hud = { type: 'command', command: 'node ~/hud/index.js', padding: 1 };
+  const bridge = new Bridge({ hub: hubWith(), homeDir: home });
+
+  // 새로 연결: 쓰던 상태 표시줄은 그대로
   fs.writeFileSync(file, JSON.stringify({ statusLine: hud }));
-  const hub = hubWith();
-  const bridge = new Bridge({ hub, homeDir: home });
-  await bridge.start();
-  try {
-    bridge.install();
-    const s = JSON.parse(fs.readFileSync(file, 'utf8'));
-    assert.ok(s.statusLine.command.includes(STATUSLINE_MARKER));
-    assert.equal(s.statusLine.refreshInterval, undefined); // 새로고침 주기를 강제하지 않음 (429 방지)
-    assert.equal(s.statusLine.padding, 1);
-    // Claude Code 처럼 상태 표시줄 명령 실행 → 원래 HUD 출력 + CodePup 에 데이터 전달
-    const out = await new Promise((resolve, reject) => {
-      const child = execFile('sh', ['-c', s.statusLine.command], { env: { ...process.env, HOME: home } }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
-      child.stdin.end(JSON.stringify(statusPayload()));
-    });
-    assert.match(out, /^\[HUD\] +\d+/); // macOS 의 wc 는 숫자 앞에 공백을 붙임
-    for (let i = 0; i < 40 && !hub.list().length; i++) await new Promise((r) => setTimeout(r, 50));
-    assert.equal(hub.list()[0].id, 'open-1');
-    bridge.uninstall();
-    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).statusLine, hud);
-  } finally {
-    bridge.stop();
-  }
+  bridge.install();
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).statusLine, hud);
+  assert.ok(bridge.isInstalled());
+
+  // 예전 버전(2.5.1 이하)이 가로챈 상태 → 앱을 켜면 claude-hud 로 되돌림
+  const legacy = JSON.parse(fs.readFileSync(file, 'utf8'));
+  legacy.statusLine = { type: 'command', command: `sh "${path.join(home, '.codepup', STATUSLINE_MARKER)}"`, refreshInterval: 5 };
+  fs.writeFileSync(file, JSON.stringify(legacy));
+  fs.writeFileSync(path.join(home, '.codepup', 'statusline-prev.json'), JSON.stringify(hud));
+  fs.writeFileSync(path.join(home, '.codepup', STATUSLINE_MARKER), '#!/bin/sh\n');
+  bridge.refresh();
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).statusLine, hud);
+  assert.ok(!fs.existsSync(path.join(home, '.codepup', STATUSLINE_MARKER)));
+
+  // 원래 상태 표시줄이 없었으면 지움
+  legacy.statusLine = { type: 'command', command: `sh "${STATUSLINE_MARKER}"` };
+  fs.writeFileSync(file, JSON.stringify(legacy));
+  bridge.uninstall();
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).statusLine, undefined);
 });
 
 const { KeepAwake, awakeReason, GRACE_MS } = require('../src/main/keep-awake');
@@ -386,7 +333,7 @@ test('닫힌 세션 다시 열기: /exit 로 직접 끝낸 세션은 복구하�
   await hub.handle('SessionEnd', { ...mk('quit'), reason: 'prompt_input_exit' }); // 사용자가 /exit
   await hub.handle('SessionEnd', { ...mk('switched'), reason: 'resume' }); // /resume 로 다른 세션으로
   await hub.handle('SessionEnd', { ...mk('crash'), reason: 'other' }); // 터미널 창이 닫힘
-  hub.status({ session_id: 'kept', cwd: '/w/kept' }, { tty: 'ttys009' }); // 상태 표시줄로 살아 있던 세션
+  await hub.handle('SessionStart', mk('kept'), { tty: 'ttys009' }); // 열려 있던 세션
   t += 5 * 60000;
   hub.sweep({ aliveTtys: new Set() }); // 맥 재시동 등으로 터미널이 사라짐
   const ids = hub.restorable().map((h) => h.id).sort();
