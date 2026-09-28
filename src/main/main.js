@@ -153,7 +153,7 @@ function createPetWindow() {
   });
   petWin.setAlwaysOnTop(true, 'floating');
   petWin.setIgnoreMouseEvents(true, { forward: true });
-  petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: store.settings.showOnFullscreen });
+  petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: store.settings.showOnFullscreen, skipTransformProcessType: true });
   petWin.loadURL(`${ORIGIN}/src/renderer/pet/index.html`);
   petWin.once('ready-to-show', () => {
     if (!store.settings.hidden) petWin.showInactive();
@@ -369,7 +369,7 @@ function applySettingsSideEffects(prev) {
   const s = store.settings;
   if (petWin && !petWin.isDestroyed()) {
     if (prev.showOnFullscreen !== s.showOnFullscreen) {
-      petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: s.showOnFullscreen });
+      petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: s.showOnFullscreen, skipTransformProcessType: true });
     }
     if (prev.hidden !== s.hidden) {
       if (s.hidden) petWin.hide();
@@ -1014,6 +1014,12 @@ app.whenReady().then(async () => {
     // 2.7.4: 돌아다니며 내는 소리는 기본으로 끔 → 소리가 나면 작업 끝 · 허락 요청이라는 뜻. 한 번만 바꾸고 이후엔 사용자 선택
     store.settings.quietWander = true;
     store.settings.ambientSounds = false;
+    store.saveSoon();
+  }
+  if (!store.settings.fullscreenOn) {
+    // 2.9.4: 전체 화면 앱(터미널 · IDE) 위에서도 펫이 보이게 기본값을 켬 (한 번만, 이후엔 사용자 선택)
+    store.settings.fullscreenOn = true;
+    store.settings.showOnFullscreen = true;
     store.saveSoon();
   }
   if (!store.settings.statsBack) {
