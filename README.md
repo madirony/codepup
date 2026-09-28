@@ -13,6 +13,18 @@
   <img src="docs/images/done.png" width="245" alt="작업 끝 알림">
 </p>
 
+#### 시연 영상
+<p>
+
+https://github.com/user-attachments/assets/f043bec9-f1dd-4030-aac1-b6e0e3b2b973
+
+</p>
+
+#### 유튜브 (이미지 클릭)
+<a href="https://www.youtube.com/watch?v=mUoc2aJu2hA" target="_blank" rel="noopener noreferrer">
+  <img width="1347" height="752" alt="image" src="https://github.com/user-attachments/assets/4aacb39f-1c64-42fc-b5c5-8724f08e3058" />
+</a>
+
 ## ⬇️ 설치 (macOS · 1분)
 
 1. **[최신 버전 받기](https://github.com/madirony/codepup/releases/latest)** — M1~M4 맥은 `arm64`, 인텔 맥은 `x64` dmg
@@ -43,7 +55,7 @@
   <img src="docs/images/board.png" width="300" alt="세션 보드">
 </p>
 
-그리고 다마고치처럼 쓰다듬고 · 던지고 · 밥 주고 · 레벨 업. 기본 캐릭터는 블랙탄 치와와 **'초코'**, 스킨으로 **스피키**도 들어 있어요.
+기본 캐릭터는 블랙탄 치와와 **'초코'**, 스킨으로 **스피키**도 들어 있어요.
 
 ## 🙋 자주 묻는 것
 
