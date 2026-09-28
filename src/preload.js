@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('codepup', {
   restoreSessions: (ids) => ipcRenderer.invoke('sessions:restore', ids),
   forgetSession: (id) => ipcRenderer.invoke('sessions:forget', id),
   closePanel: () => ipcRenderer.send('panel:close'),
+  // 메뉴 막대 팝오버
+  onPopoverShown: listen('popover:shown'),
+  resizePopover: (h) => ipcRenderer.send('popover:size', h),
+  closePopover: () => ipcRenderer.send('popover:close'),
   claudeStatus: () => ipcRenderer.invoke('claude:status'),
   connectClaude: () => ipcRenderer.invoke('claude:connect'),
   disconnectClaude: () => ipcRenderer.invoke('claude:disconnect'),

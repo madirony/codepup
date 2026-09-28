@@ -153,6 +153,18 @@ app.whenReady().then(async () => {
   check('펼친 세션의 답변이 마크다운으로 보인다', mdHtml.includes('<b>만들었어요</b>') && mdHtml.includes('<li>폼 검증</li>'), mdHtml.slice(0, 120));
   await shot(panel, '04-panel.png');
 
+  // 6-2) 메뉴 막대 아이콘 왼쪽 클릭 → 팝오버
+  await run(`window.codepup.menuAction('toggle-popover', {})`);
+  await wait(2000);
+  const pop = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/popover/'));
+  check('메뉴 막대 팝오버가 열린다', !!pop && pop.isVisible());
+  if (pop) {
+    const info = await pop.webContents.executeJavaScript(`({ rows: document.querySelectorAll('#list .row').length, cpu: document.querySelector('#cpu').textContent, summary: document.querySelector('#summary').textContent, awake: document.querySelector('#awake-sub').textContent })`);
+    check('팝오버에 세션 목록 · CPU · 잠자기 방지가 보인다', info.rows >= 2 && /%/.test(info.cpu) && info.awake.length > 0, JSON.stringify(info));
+    await shot(pop, '04b-popover.png');
+    pop.hide();
+  }
+
   // 7) 세션 종료 → 복구 후보 (rcup)
   await hook('SessionEnd', { ...s1, reason: 'other' });
   await wait(800);

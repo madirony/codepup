@@ -60,6 +60,7 @@ let awake;
 let petWin = null;
 let settingsWin = null;
 let panelWin = null;
+let popWin = null; // 메뉴 막대 아이콘을 누르면 뜨는 팝오버
 let lastTickAt = Date.now();
 let lastSavedAt = 0;
 let idleNap = false;
@@ -68,7 +69,7 @@ let quitting = false;
 // ---------- 공용 ----------
 
 function windows() {
-  return [petWin, settingsWin, panelWin].filter((w) => w && !w.isDestroyed());
+  return [petWin, settingsWin, panelWin, popWin].filter((w) => w && !w.isDestroyed());
 }
 
 function sendToAll(channel, payload) {
@@ -241,6 +242,84 @@ function openPanel({ focusSession, toggle } = {}) {
   panelWin.on('closed', () => {
     panelWin = null;
   });
+}
+
+// ---------- 메뉴 막대 팝오버 ----------
+
+const POP_W = 372;
+let popAnchor = null; // 마지막으로 누른 메뉴 막대 아이콘 위치
+let popHiddenAt = 0;
+
+function placePopover(bounds, height) {
+  if (bounds && bounds.width) popAnchor = bounds;
+  const b = popAnchor || (tray ? tray.bounds() : null);
+  const disp = b ? screen.getDisplayNearestPoint({ x: b.x, y: b.y }) : screen.getPrimaryDisplay();
+  const wa = disp.workArea;
+  const h = Math.min(height || popWin.getBounds().height, wa.height - 12);
+  let x = b ? Math.round(b.x + b.width / 2 - POP_W / 2) : wa.x + wa.width - POP_W - 8;
+  x = Math.max(wa.x + 6, Math.min(x, wa.x + wa.width - POP_W - 6));
+  const y = b ? Math.round(b.y + b.height + 4) : wa.y + 4;
+  popWin.setBounds({ x, y: Math.max(y, wa.y + 2), width: POP_W, height: h });
+}
+
+function togglePopover(bounds) {
+  if (popWin && !popWin.isDestroyed()) {
+    if (popWin.isVisible()) return popWin.hide();
+    if (Date.now() - popHiddenAt < 300) return; // 아이콘을 다시 눌러 닫은 경우 (blur 로 먼저 숨겨짐)
+    placePopover(bounds);
+    popWin.show();
+    popWin.focus();
+    popWin.webContents.send('popover:shown');
+    return;
+  }
+  popWin = new BrowserWindow({
+    width: POP_W,
+    height: 520,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    hasShadow: true,
+    title: 'CodePup',
+    webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true },
+  });
+  popWin.setAlwaysOnTop(true, 'pop-up-menu');
+  popWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  popWin.loadURL(`${ORIGIN}/src/renderer/popover/index.html`);
+  popWin.on('blur', () => {
+    if (popWin && !popWin.isDestroyed() && !popWin.webContents.isDevToolsOpened()) {
+      popHiddenAt = Date.now();
+      popWin.hide();
+    }
+  });
+  popWin.on('closed', () => {
+    popWin = null;
+  });
+  popWin.once('ready-to-show', () => {
+    placePopover(bounds);
+    popWin.show();
+    popWin.focus();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+  });
+}
+
+// 잠자기 방지 ▾ 메뉴
+function showAwakeMenu() {
+  const s = store.settings;
+  Menu.buildFromTemplate([
+    { label: 'Claude 세션이 열려 있으면 (원격 작업용)', type: 'radio', checked: s.keepAwake !== false && s.keepAwakeMode !== 'working', click: () => { handleMenuAction('awake-auto', { value: true }); handleMenuAction('awake-mode', { value: 'open' }); } },
+    { label: 'Claude 가 일할 때만', type: 'radio', checked: s.keepAwake !== false && s.keepAwakeMode === 'working', click: () => { handleMenuAction('awake-auto', { value: true }); handleMenuAction('awake-mode', { value: 'working' }); } },
+    { label: '자동으로 막지 않기', type: 'radio', checked: s.keepAwake === false, click: () => handleMenuAction('awake-auto', { value: false }) },
+    { type: 'separator' },
+    { label: '지금부터 계속 깨어 있기', type: 'checkbox', checked: !!s.keepAwakeManual, click: (i) => handleMenuAction('awake-manual', { value: i.checked }) },
+    { type: 'separator' },
+    { label: '자세한 설정…', click: () => openSettings('claude') },
+  ]).popup({ window: popWin || undefined });
 }
 
 // ---------- 설정 ----------
@@ -622,6 +701,19 @@ function handleMenuAction(name, payload = {}) {
     case 'sound-toggle':
       updateSettings({ soundEnabled: payload.value });
       break;
+    case 'toggle-popover':
+      togglePopover(payload && payload.bounds);
+      break;
+    case 'awake-toggle': {
+      // 팝오버의 ☕ 버튼: 켜져 있으면(자동이든 직접이든) 끄고, 꺼져 있으면 자동으로
+      const on = store.settings.keepAwake !== false || store.settings.keepAwakeManual;
+      updateSettings(on ? { keepAwake: false, keepAwakeManual: false } : { keepAwake: true });
+      evaluateAwake();
+      break;
+    }
+    case 'awake-menu':
+      showAwakeMenu();
+      break;
     case 'open-settings':
       openSettings(payload.tab);
       break;
@@ -766,6 +858,10 @@ function registerIpc() {
     return true;
   });
   ipcMain.on('panel:close', () => panelWin && panelWin.hide());
+  ipcMain.on('popover:size', (_e, h) => {
+    if (popWin && !popWin.isDestroyed() && Number.isFinite(h)) placePopover(null, Math.round(h));
+  });
+  ipcMain.on('popover:close', () => popWin && popWin.hide());
 
 
   // Claude Code 연결
@@ -875,10 +971,11 @@ app.whenReady().then(async () => {
     store.settings.ambientSounds = false;
     store.saveSoon();
   }
-  if (!store.settings.compactTray) {
-    // 2.7: 메뉴 막대를 아이콘 위주로 (CPU 는 아이콘 달리기 속도로). 한 번만 바꾸고 이후엔 사용자 선택을 따름
+  if (!store.settings.statsBack) {
+    // 2.9: 2.7 에서 꺼 버렸던 메뉴 막대 CPU · 메모리를 다시 켬 (한 번만, 이후엔 사용자 선택)
+    store.settings.statsBack = true;
     store.settings.compactTray = true;
-    store.settings.tray = { ...store.settings.tray, cpu: false };
+    store.settings.tray = { ...store.settings.tray, cpu: true, mem: true };
     store.saveSoon();
   }
   pet = Pet.normalize(store.pet);

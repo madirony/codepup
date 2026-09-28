@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>CodePup</title>
+  <link rel="stylesheet" href="popover.css">
+</head>
+<body>
+  <div class="pop" id="pop">
+    <header class="head">
+      <img id="avatar" alt="">
+      <div class="who"><b id="name"></b><small id="summary"></small></div>
+      <button id="settings" class="icon" title="설정 (⌘,)">⚙︎</button>
+    </header>
+
+    <div class="stats">
+      <div class="st"><div class="k">🖥 CPU</div><div class="v" id="cpu">–</div><svg class="spark" viewBox="0 0 60 14" preserveAspectRatio="none"><polyline id="spark" fill="none" stroke-width="1.6"/></svg></div>
+      <div class="st"><div class="k">🧠 메모리</div><div class="v" id="mem">–</div><div class="bar"><i id="mem-bar"></i></div></div>
+      <div class="st"><div class="k">💾 저장</div><div class="v" id="disk">–</div><div class="bar"><i id="disk-bar"></i></div></div>
+      <div class="st"><div class="k" id="bat-k">🔋 배터리</div><div class="v" id="bat">–</div><div class="bar"><i id="bat-bar"></i></div></div>
+    </div>
+
+    <div id="connect" class="notice hidden">
+      <span>Claude Code 와 아직 연결되지 않았어요</span>
+      <button id="connect-btn" class="btn ok">연결하기</button>
+    </div>
+
+    <section id="asks-box" class="hidden">
+      <div class="sec"><span>🔔 허락을 기다려요</span><span id="asks-count"></span></div>
+      <div id="asks"></div>
+    </section>
+
+    <div id="muted" class="notice hidden">
+      <span id="muted-text"></span>
+      <button id="muted-btn" class="btn">🔔 알림 켜기</button>
+    </div>
+
+    <section>
+      <div class="sec"><span>세션</span><button id="board" class="link">⌘⇧J 크게 보기</button></div>
+      <div id="list" class="list"></div>
+    </section>
+
+    <footer class="foot">
+      <button id="restore" class="fb"><b>🔁 닫힌 세션</b><small id="restore-sub">없음</small></button>
+      <div class="fb split" id="awake-box">
+        <button id="awake" class="main"><b>☕ 잠자기 방지</b><small id="awake-sub"></small></button>
+        <button id="awake-more" class="more" title="잠자기 방지 옵션">▾</button>
+      </div>
+      <button id="lid" class="fb"><b>🧳 덮개를 닫아도</b><small id="lid-sub">잠들지 않기 · 꺼짐</small></button>
+    </footer>
+  </div>
+  <script src="../shared/md.js"></script>
+  <script src="popover.js"></script>
+</body>
+</html>

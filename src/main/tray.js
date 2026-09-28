@@ -28,8 +28,13 @@ class PetTray {
     this.frameIndex = 0;
     this.animTimer = null;
     this.state = { stats: null, pet: null, settings: null, sessions: null, awake: null };
-    // macOS는 setContextMenu 만으로 클릭 시 메뉴가 열리고, Windows는 왼쪽 클릭도 메뉴를 열도록
-    if (process.platform !== 'darwin') this.tray.on('click', () => this.tray.popUpContextMenu());
+    // 왼쪽 클릭 → 세션 팝오버 · 오른쪽 클릭(또는 ⌃클릭) → 메뉴
+    this.menu = null;
+    this.tray.on('click', (e, bounds) => {
+      if (e && e.ctrlKey) return this.popMenu();
+      this.onAction('toggle-popover', { bounds: bounds || this.tray.getBounds() });
+    });
+    this.tray.on('right-click', () => this.popMenu());
     this.scheduleFrame();
   }
 
@@ -152,7 +157,15 @@ class PetTray {
       { type: 'separator' },
       { label: 'CodePup 종료', click: act('quit'), accelerator: 'CommandOrControl+Q' }
     );
-    this.tray.setContextMenu(Menu.buildFromTemplate(template));
+    this.menu = Menu.buildFromTemplate(template);
+  }
+
+  popMenu() {
+    if (this.menu) this.tray.popUpContextMenu(this.menu);
+  }
+
+  bounds() {
+    return this.tray.getBounds();
   }
 
   sessionItems() {
