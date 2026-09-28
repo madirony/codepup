@@ -1,4 +1,4 @@
-# 🐶 CodePup
+# 🐶 CodePup - Claude 알리미
 
 > Claude Code 에게 일 맡겨 놓고 딴 거 하다가, **허락(y/n) 창에서 멈춘 줄도 모르고 있었거나, 작업이 끝난 걸 뒤늦게 알아서** 시간을 날린 적이 있나요? ~~dangerously-skip-permissions~~
 > 
@@ -7,6 +7,8 @@
 > 멀티-태스킹 시대에 필요한 댕댕이 하나 입양하는 것. 어떠신가요?
 > 
 > remote control을 자주 사용하는 유저라면, 세션 관리도 편하게 할 수 있어요!
+>
+> Codex, AGY 지원 예정
 
 <p>
   <img src="docs/images/permission.png" width="330" alt="허락 요청 말풍선">
