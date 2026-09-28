@@ -60,13 +60,24 @@ exit 0
 const STATUSLINE_MARKER = 'codepup-statusline.sh';
 const STATUSLINE_SCRIPT = `#!/bin/sh
 # CodePup 상태 표시줄 연결 (CodePup 이 설치함 · 연결을 해제하면 원래 설정으로 돌아가요)
+# 로컬(127.0.0.1)로만 보내요. Anthropic API 는 부르지 않아요.
 IN=$(cat)
 CONF="$HOME/.codepup/bridge.env"
 if [ -r "$CONF" ]; then
   . "$CONF"
   if [ -n "$CODEPUP_PORT" ]; then
+    TTY=""
+    P=$PPID
+    i=0
+    while [ $i -lt 5 ] && [ -n "$P" ] && [ "$P" != "1" ]; do
+      T=$(ps -o tty= -p "$P" 2>/dev/null | tr -d ' ')
+      case "$T" in ""|"?"|"??") ;; *) TTY="$T"; break ;; esac
+      P=$(ps -o ppid= -p "$P" 2>/dev/null | tr -d ' ')
+      i=$((i + 1))
+    done
     printf '%s' "$IN" | curl -s --max-time 2 -X POST \\
       -H "Authorization: Bearer $CODEPUP_TOKEN" -H "Content-Type: application/json" \\
+      -H "X-CodePup-TTY: $TTY" \\
       --data-binary @- "http://127.0.0.1:$CODEPUP_PORT/status" >/dev/null 2>&1 &
   fi
 fi
@@ -151,7 +162,7 @@ class Bridge {
       }
       if (isStatus) {
         try {
-          this.hub.status(payload);
+          this.hub.status(payload, { tty: String(req.headers['x-codepup-tty'] || '').slice(0, 40) });
         } catch (err) {
           this.onError(err);
         }
@@ -217,6 +228,12 @@ class Bridge {
     return true;
   }
 
+  // 앱이 켜질 때: 이미 연결돼 있으면 스크립트와 설정을 이 버전으로 갱신 (예전 5초 새로고침 제거 등)
+  refresh() {
+    if (!this.isInstalled()) return false;
+    return this.install();
+  }
+
   uninstall() {
     const settings = this.stripOurs(this.readClaudeSettings());
     this.restoreStatusLine(settings);
@@ -239,9 +256,11 @@ class Bridge {
       }
     }
     const saved = this.readPrevStatusLine();
-    const ours = { type: 'command', command: `sh "${this.statusScript}"`, refreshInterval: 5 };
+    // 새로고침 주기는 강제하지 않아요 (원래 설정을 그대로). 주기를 짧게 두면 이어서 실행되는
+    // claude-hud 같은 명령이 세션마다 사용량을 자꾸 조회해서 429 (rate limited) 가 날 수 있어요.
+    const ours = { type: 'command', command: `sh "${this.statusScript}"` };
     if (saved && Number.isFinite(saved.padding)) ours.padding = saved.padding;
-    if (saved && Number.isFinite(saved.refreshInterval)) ours.refreshInterval = Math.min(5, saved.refreshInterval);
+    if (saved && Number.isFinite(saved.refreshInterval)) ours.refreshInterval = saved.refreshInterval;
     settings.statusLine = ours;
   }
 

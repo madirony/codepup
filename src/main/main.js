@@ -303,6 +303,7 @@ function sanitizePatch(patch) {
     'awayMode',
     'restoreRemoteControl',
     'restoreSkipPermissions',
+    'restoreTabs',
   ]) {
     if (typeof s[key] === 'boolean') out[key] = s[key];
   }
@@ -443,7 +444,7 @@ function disconnectClaude() {
 
 function restoreOptions() {
   const s = store.settings;
-  return { remoteControl: s.restoreRemoteControl, skipPermissions: s.restoreSkipPermissions, extraArgs: s.restoreExtraArgs, terminal: s.restoreTerminal };
+  return { remoteControl: s.restoreRemoteControl, skipPermissions: s.restoreSkipPermissions, extraArgs: s.restoreExtraArgs, terminal: s.restoreTerminal, tabs: s.restoreTabs };
 }
 
 async function restoreSessions(ids) {
@@ -521,13 +522,14 @@ function onAwakeChanged(state) {
   }
 }
 
-function scanOpenSessions() {
+async function scanOpenSessions() {
   try {
     for (const t of transcripts.scanActive()) hub.observe(t);
   } catch (err) {
     console.error('[transcripts]', err);
   }
-  hub.sweep();
+  const aliveTtys = process.platform === 'darwin' ? await terminals.aliveClaudeTtys() : null;
+  hub.sweep({ aliveTtys });
 }
 
 function onHubChanged({ session, event, counts }) {
@@ -830,6 +832,11 @@ app.whenReady().then(async () => {
     await bridge.start();
   } catch (err) {
     console.error('[bridge] failed to start', err);
+  }
+  try {
+    bridge.refresh(); // 예전 버전이 넣은 5초 새로고침 등을 이 버전 설정으로 갱신
+  } catch (err) {
+    console.error('[bridge] refresh', err);
   }
 
   registerProtocol();

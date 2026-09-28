@@ -1,7 +1,7 @@
 {
   "name": "codepup",
   "productName": "CodePup",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "여러 Claude Code 세션을 지켜보다가 끝나거나 허락이 필요하면 달려와 알려 주는 데스크톱 펫 (메뉴 막대 시스템 모니터 포함)",
   "main": "src/main/main.js",
   "author": "madirony",
@@ -55,7 +55,7 @@
       "gatekeeperAssess": false,
       "extendInfo": {
         "LSUIElement": true,
-        "NSAppleEventsUsageDescription": "Claude Code 세션이 돌아가는 터미널 창으로 이동하고, 닫힌 세션을 새 터미널에서 다시 열기 위해 필요해요."
+        "NSAppleEventsUsageDescription": "Claude Code 세션이 돌아가는 터미널 창으로 이동하고, 닫힌 세션을 터미널 탭으로 다시 열기 위해 필요해요."
       }
     },
     "dmg": {

@@ -325,12 +325,13 @@ class SessionHub extends EventEmitter {
    * Claude Code 상태 표시줄이 몇 초마다 보내 주는 JSON 을 반영합니다.
    * 훅 이벤트가 없어도 열려 있는 세션을 찾고, 요금제 한도와 컨텍스트 사용률을 추적해요.
    */
-  status(payload) {
+  status(payload, meta = {}) {
     if (!payload || typeof payload.session_id !== 'string' || !payload.session_id) return;
     const isNew = !this.sessions.has(payload.session_id);
     const cwd = payload.cwd || (payload.workspace && payload.workspace.current_dir) || '';
     const s = this.upsert({ session_id: payload.session_id, cwd, transcript_path: payload.transcript_path }, {}, { touch: isNew });
     s.statusAt = this.now();
+    if (meta.tty && meta.tty !== s.tty) s.tty = meta.tty;
     let changed = isNew;
     const cw = payload.context_window || {};
     if (Number.isFinite(cw.used_percentage)) {
@@ -398,12 +399,14 @@ class SessionHub extends EventEmitter {
   }
 
   // 신호가 끊긴 세션 정리 (터미널을 그냥 닫으면 SessionEnd 가 안 올 수 있음)
-  sweep({ statusTimeoutMs = 90000, idleTimeoutMs = 30 * 60000 } = {}) {
+  // aliveTtys: claude 가 돌고 있는 터미널(tty) 목록. 모르면(null) 오래 조용한 세션만 정리해요.
+  sweep({ aliveTtys = null, graceMs = 60000, idleTimeoutMs = 3 * 60 * 60000 } = {}) {
     const t = this.now();
     for (const s of [...this.sessions.values()]) {
       if (s.pending || s.status === 'working' || s.status === 'permission') continue;
       const lastSignal = Math.max(s.statusAt || 0, s.updatedAt || 0);
-      const gone = s.statusAt ? t - s.statusAt > statusTimeoutMs : t - lastSignal > idleTimeoutMs;
+      const tty = String(s.tty || '').replace(/^\/dev\//, '');
+      const gone = aliveTtys && tty ? !aliveTtys.has(tty) && t - lastSignal > graceMs : t - lastSignal > idleTimeoutMs;
       if (gone) {
         s.status = 'ended';
         s.endReason = 'vanished';

@@ -91,10 +91,12 @@
       </div>
       <div class="card">
         <h3>🔁 닫힌 세션 다시 열기</h3>
-        <p class="muted">메뉴 막대나 세션 보드에서 닫힌 세션을 새 터미널 창으로 한 번에 다시 열어요. (claude --resume)</p>
+        <p class="muted">메뉴 막대나 세션 보드에서 닫힌 세션을 한 번에 다시 열어요. (claude --resume)</p>
         <label class="row check"><input id="s-restoreRemoteControl" type="checkbox"> 원격 제어(--rc)를 켠 채로 열기</label>
         <label class="row check"><input id="s-restoreSkipPermissions" type="checkbox"> 권한 확인 건너뛰고 열기 (--dangerously-skip-permissions)</label>
         <p class="muted">⚠️ 건너뛰면 Claude 가 파일 수정 · 명령 실행을 묻지 않고 바로 해요. 믿을 수 있는 프로젝트에서만 켜 주세요. 이렇게 연 세션은 허락 말풍선이 뜨지 않아요.</p>
+        <label class="row check"><input id="s-restoreTabs" type="checkbox"> 쓰던 터미널 창에 탭으로 추가 (끄면 새 창)</label>
+        <p class="muted">macOS 터미널은 탭을 만들 때 ⌘T 를 보내서, 처음 한 번 손쉬운 사용 권한을 물어봐요. 허용하지 않으면 새 창으로 열려요. iTerm2 는 권한 없이 탭으로 열려요.</p>
         <div class="row">터미널
           <select id="s-restoreTerminal">
             <option value="auto">원래 쓰던 터미널 (Terminal / iTerm)</option>

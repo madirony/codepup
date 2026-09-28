@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS = {
   replyWaitMin: 30, // 자리 비움 모드에서 기다리는 시간
   restoreRemoteControl: true, // 세션 복구 시 --rc (원격 제어) 켜기
   restoreSkipPermissions: false, // 세션 복구 시 --dangerously-skip-permissions
+  restoreTabs: true, // 쓰던 터미널 창에 탭으로 추가
   restoreTerminal: 'auto', // 'auto' | 'Terminal' | 'iTerm'
   restoreExtraArgs: '',
   customImages: {}, // slotKey -> user-media 파일 이름

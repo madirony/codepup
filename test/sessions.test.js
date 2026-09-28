@@ -105,7 +105,7 @@ test('종료된 세션은 복구 후보가 된다', async () => {
   await hub.handle('SessionEnd', { ...base, reason: 'other' });
   assert.equal(hub.list().length, 0);
   assert.equal(hub.restorable()[0].id, 's1');
-  assert.match(resumeCommand(hub.restorable()[0]), /^cd '\/Users\/me\/work\/my-app' && claude --resume 's1' --rc$/);
+  assert.match(resumeCommand(hub.restorable()[0]), /^cd '\/Users\/me\/work\/my-app' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude --resume 's1' --rc$/);
 });
 
 test('권한 요청 설명', () => {
@@ -241,17 +241,28 @@ test('상태 표시줄: 컨텍스트 85% 를 넘으면 한 번 알리고, 압축
   assert.deepEqual(ctx, [86, 88]);
 });
 
-test('정리: 상태 표시줄 신호가 끊긴 세션은 닫힌 세션으로 옮긴다', () => {
+test('정리: claude 가 돌던 터미널이 닫힌 세션만 닫힌 세션으로 옮긴다', () => {
   let t = 1_000_000;
   const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
-  hub.status(statusPayload());
-  t += 30_000;
-  hub.sweep();
-  assert.equal(hub.list().length, 1);
-  t += 120_000;
-  hub.sweep();
-  assert.equal(hub.list().length, 0);
+  hub.status(statusPayload(), { tty: 'ttys003' });
+  hub.status(statusPayload({ session_id: 'quiet', cwd: '/w/quiet' }));
+  t += 30 * 60000; // 30분 동안 조용해도 (새로고침 주기가 없으면 신호가 안 옴)
+  hub.sweep({ aliveTtys: new Set(['ttys003']) });
+  assert.equal(hub.list().length, 2);
+  hub.sweep({ aliveTtys: new Set() }); // 터미널 창을 닫음
+  assert.deepEqual(hub.list().map((s) => s.id), ['quiet']);
   assert.equal(hub.restorable()[0].id, 'open-1');
+  t += 3 * 60 * 60000; // tty 를 모르는 세션은 오래 조용하면 정리
+  hub.sweep({ aliveTtys: new Set() });
+  assert.equal(hub.list().length, 0);
+});
+
+test('다시 열기 명령은 Claude 의 하위 세션 표시를 지우고 실행한다', () => {
+  const { resumeCommand, cleanEnv } = require('../src/main/terminals');
+  const cmd = resumeCommand({ id: 'abc', cwd: '/w/app' });
+  assert.match(cmd, /env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION .*claude --resume 'abc' --rc/);
+  const env = cleanEnv({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_CHILD_SESSION: '1' });
+  assert.deepEqual(env, { PATH: '/bin' });
 });
 
 test('대화 기록 파일로 열린 세션을 찾는다', () => {
@@ -286,7 +297,7 @@ test('설치기: 쓰던 상태 표시줄(claude-hud 등)은 이어서 실행하�
     bridge.install();
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.ok(s.statusLine.command.includes(STATUSLINE_MARKER));
-    assert.equal(s.statusLine.refreshInterval, 5);
+    assert.equal(s.statusLine.refreshInterval, undefined); // 새로고침 주기를 강제하지 않음 (429 방지)
     assert.equal(s.statusLine.padding, 1);
     // Claude Code 처럼 상태 표시줄 명령 실행 → 원래 HUD 출력 + CodePup 에 데이터 전달
     const out = await new Promise((resolve, reject) => {
@@ -363,8 +374,8 @@ test('☕ 원격 작업 모드: 세션이 열려 있기만 해도 깨어 있는�
 
 test('닫힌 세션 다시 열기: 권한 확인 건너뛰기 옵션', () => {
   const h = { id: 's1', cwd: '/Users/me/work/my-app' };
-  assert.equal(resumeCommand(h, { remoteControl: true, skipPermissions: true }), "cd '/Users/me/work/my-app' && claude --resume 's1' --rc --dangerously-skip-permissions");
-  assert.equal(resumeCommand(h, { remoteControl: false }), "cd '/Users/me/work/my-app' && claude --resume 's1'");
+  assert.equal(resumeCommand(h, { remoteControl: true, skipPermissions: true }), "cd '/Users/me/work/my-app' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude --resume 's1' --rc --dangerously-skip-permissions");
+  assert.equal(resumeCommand(h, { remoteControl: false }), "cd '/Users/me/work/my-app' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude --resume 's1'");
 });
 
 test('닫힌 세션 다시 열기: /exit 로 직접 끝낸 세션은 복구하지 않는다', async () => {
@@ -375,9 +386,9 @@ test('닫힌 세션 다시 열기: /exit 로 직접 끝낸 세션은 복구하�
   await hub.handle('SessionEnd', { ...mk('quit'), reason: 'prompt_input_exit' }); // 사용자가 /exit
   await hub.handle('SessionEnd', { ...mk('switched'), reason: 'resume' }); // /resume 로 다른 세션으로
   await hub.handle('SessionEnd', { ...mk('crash'), reason: 'other' }); // 터미널 창이 닫힘
-  hub.status({ session_id: 'kept', cwd: '/w/kept' }); // 상태 표시줄로 살아 있던 세션
+  hub.status({ session_id: 'kept', cwd: '/w/kept' }, { tty: 'ttys009' }); // 상태 표시줄로 살아 있던 세션
   t += 5 * 60000;
-  hub.sweep(); // 맥 재시동 등으로 신호가 끊김
+  hub.sweep({ aliveTtys: new Set() }); // 맥 재시동 등으로 터미널이 사라짐
   const ids = hub.restorable().map((h) => h.id).sort();
   assert.deepEqual(ids, ['crash', 'kept']);
   assert.equal(hub.history.find((h) => h.id === 'kept').endReason, 'vanished');

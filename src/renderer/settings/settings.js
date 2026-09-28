@@ -97,6 +97,7 @@
     replyWaitMin: { type: 'number', num: true },
     restoreRemoteControl: { type: 'check' },
     restoreSkipPermissions: { type: 'check' },
+    restoreTabs: { type: 'check' },
     restoreTerminal: { type: 'select' },
     restoreExtraArgs: { type: 'text' },
     keepAwake: { type: 'check' },
