@@ -500,14 +500,48 @@ function onAwakeChanged(state) {
   }
 }
 
+const procCwd = new Map(); // pid → 작업 폴더 (lsof 는 새 프로세스에만)
+
 async function scanOpenSessions() {
   try {
     for (const t of transcripts.scanActive()) hub.observe(t);
   } catch (err) {
     console.error('[transcripts]', err);
   }
-  const aliveTtys = process.platform === 'darwin' ? await terminals.aliveClaudeTtys() : null;
-  hub.sweep({ aliveTtys });
+  const procs = process.platform === 'darwin' ? await terminals.runningClaudes() : null;
+  if (procs) {
+    try {
+      await attachRunning(procs);
+    } catch (err) {
+      console.error('[running]', err);
+    }
+  }
+  hub.sweep({ aliveTtys: procs ? await terminals.aliveClaudeTtys(procs) : null });
+}
+
+// 터미널에서 돌고 있는 claude → 세션 (명령줄의 --resume ID, 없으면 그 폴더의 최근 대화 기록)
+async function attachRunning(procs) {
+  const live = new Set(procs.map((p) => p.pid));
+  for (const pid of procCwd.keys()) if (!live.has(pid)) procCwd.delete(pid);
+  const taken = new Set(hub.list().map((s) => s.id));
+  const knownTtys = new Set(hub.list().map((s) => s.tty).filter(Boolean));
+  for (const p of procs) {
+    if (knownTtys.has(p.tty)) continue;
+    if (!procCwd.has(p.pid)) procCwd.set(p.pid, await terminals.cwdOf(p.pid));
+    const cwd = procCwd.get(p.pid);
+    if (!cwd) continue;
+    let id = terminals.sessionIdFromArgs(p.command);
+    let file = '';
+    if (!id) {
+      const recent = transcripts.recentSessions({ cwd }).filter((r) => !taken.has(r.id));
+      if (!recent.length) continue; // 아직 대화를 시작하지 않은 새 세션
+      id = recent[0].id;
+      file = recent[0].path;
+    }
+    taken.add(id);
+    knownTtys.add(p.tty);
+    hub.attach({ session_id: id, cwd, tty: p.tty, transcript_path: file });
+  }
 }
 
 function onHubChanged({ session, event, counts }) {

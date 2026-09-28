@@ -71,4 +71,31 @@ function scanActive({ home = os.homedir(), withinMs = 3 * 60 * 1000, now = Date.
   return out;
 }
 
-module.exports = { scanActive, parseTail };
+// Claude Code 는 작업 폴더 경로의 글자 · 숫자가 아닌 문자를 '-' 로 바꾼 이름으로 대화 기록 폴더를 만들어요
+function projectDir(home, cwd) {
+  return path.join(home, '.claude', 'projects', String(cwd).replace(/[^a-zA-Z0-9]/g, '-'));
+}
+
+// 그 폴더에서 최근 대화 기록 순으로 [{ id, mtime, path }]
+function recentSessions({ home = os.homedir(), cwd, limit = 10 } = {}) {
+  const dir = projectDir(home, cwd);
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+  } catch {
+    return [];
+  }
+  return files
+    .map((f) => {
+      try {
+        return { id: f.slice(0, -6), mtime: fs.statSync(path.join(dir, f)).mtimeMs, path: path.join(dir, f) };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, limit);
+}
+
+module.exports = { scanActive, parseTail, projectDir, recentSessions };

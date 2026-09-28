@@ -156,20 +156,49 @@ async function openSessions(sessions, opts = {}) {
   return results;
 }
 
-// claude 가 돌고 있는 터미널(tty) 목록 → 창을 닫아 사라진 세션 정리에 사용 (알 수 없으면 null)
-function aliveClaudeTtys() {
+// 대화형 claude 명령인지 (claude -p / --print 같은 한 번짜리 실행은 제외)
+const CLAUDE_RE = /(^|[\s/])claude(\s|$)/;
+function isInteractiveClaude(command) {
+  return CLAUDE_RE.test(command) && !/(^|\s)(-p|--print)(\s|$)/.test(command);
+}
+
+// 명령줄에 세션 ID 가 있으면 (--resume <id> · -r <id> · --session-id <id>)
+function sessionIdFromArgs(command) {
+  const m = /(?:--resume|-r|--session-id)[\s=]+['"]?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(command);
+  return m ? m[1] : '';
+}
+
+// 지금 터미널에서 돌고 있는 claude 목록 [{ pid, tty, command }] (알 수 없으면 null)
+function runningClaudes() {
   return new Promise((resolve) => {
-    execFile('ps', ['-axo', 'tty=,command='], { timeout: 4000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+    execFile('ps', ['-axo', 'pid=,tty=,command='], { timeout: 4000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
       if (err) return resolve(null);
-      const set = new Set();
+      const out = [];
       for (const line of String(stdout).split('\n')) {
-        const m = /^\s*(\S+)\s+(.*)$/.exec(line);
-        if (!m || m[1] === '?' || m[1] === '??') continue;
-        if (/(^|[\s/])claude(\s|$)/.test(m[2])) set.add(m[1].replace(/^\/dev\//, ''));
+        const m = /^\s*(\d+)\s+(\S+)\s+(.*)$/.exec(line);
+        if (!m || m[2] === '?' || m[2] === '??') continue;
+        if (isInteractiveClaude(m[3])) out.push({ pid: Number(m[1]), tty: m[2].replace(/^\/dev\//, ''), command: m[3] });
       }
-      resolve(set);
+      resolve(out);
     });
   });
 }
 
-module.exports = { focusSession, openSessions, resumeCommand, aliveClaudeTtys, cleanEnv, shQuote, asString, APPS };
+// 프로세스의 작업 폴더 (macOS lsof)
+function cwdOf(pid) {
+  return new Promise((resolve) => {
+    execFile('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], { timeout: 4000 }, (err, stdout) => {
+      if (err) return resolve('');
+      const line = String(stdout).split('\n').find((l) => l.startsWith('n'));
+      resolve(line ? line.slice(1) : '');
+    });
+  });
+}
+
+// claude 가 돌고 있는 터미널(tty) 목록 → 창을 닫아 사라진 세션 정리에 사용 (알 수 없으면 null)
+async function aliveClaudeTtys(procs) {
+  const list = procs || (await runningClaudes());
+  return list ? new Set(list.map((p) => p.tty)) : null;
+}
+
+module.exports = { focusSession, openSessions, resumeCommand, aliveClaudeTtys, runningClaudes, cwdOf, isInteractiveClaude, sessionIdFromArgs, cleanEnv, shQuote, asString, APPS };

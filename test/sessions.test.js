@@ -175,15 +175,64 @@ test('정리: claude 가 돌던 터미널이 닫힌 세션만 닫힌 세션으�
   const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
   await hub.handle('SessionStart', { session_id: 'open-1', cwd: '/w/app' }, { tty: 'ttys003' });
   hub.observe({ session_id: 'quiet', cwd: '/w/quiet', mtime: t }); // tty 를 모르는 세션
-  t += 30 * 60000; // 30분 동안 조용해도
+  t += 15 * 60000; // 15분 동안 조용해도
   hub.sweep({ aliveTtys: new Set(['ttys003']) });
   assert.equal(hub.list().length, 2);
-  hub.sweep({ aliveTtys: new Set() }); // 터미널 창을 닫음
+  hub.sweep({ aliveTtys: new Set(['ttys100']) }); // 그 터미널 창만 닫음 (다른 claude 는 돌고 있음)
   assert.deepEqual(hub.list().map((s) => s.id), ['quiet']);
   assert.equal(hub.restorable()[0].id, 'open-1');
-  t += 3 * 60 * 60000; // tty 를 모르는 세션은 오래 조용하면 정리
+  t += 6 * 60000; // tty 를 모르는 세션은 기록이 20분 멈추면 정리
+  hub.sweep({ aliveTtys: new Set(['ttys009']) });
+  assert.equal(hub.list().length, 0);
+});
+
+test('정리: claude 가 하나도 안 돌면 터미널을 모르는 세션까지 모두 정리 (iTerm 을 통째로 닫은 경우)', async () => {
+  let t = 1_000_000;
+  const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
+  await hub.handle('SessionStart', { session_id: 'a', cwd: '/w/a' }, { tty: 'ttys001' });
+  hub.observe({ session_id: 'b', cwd: '/w/b', mtime: t }); // 대화 기록으로만 찾은 세션
+  t += 30000;
+  hub.sweep({ aliveTtys: new Set() });
+  assert.equal(hub.list().length, 2); // 방금 전까지 신호가 있었으면 1분은 기다림
+  t += 60000;
   hub.sweep({ aliveTtys: new Set() });
   assert.equal(hub.list().length, 0);
+  // 끝난 세션은 대화 기록이 방금 바뀌었어도 다시 살아나지 않음
+  hub.observe({ session_id: 'b', cwd: '/w/b', mtime: t });
+  assert.equal(hub.list().length, 0);
+});
+
+test('정리: 대화 기록이 계속 갱신되는 세션은 살아 있는 것으로 봄', () => {
+  let t = 1_000_000;
+  const hub = new SessionHub({ getSettings: () => ({}), now: () => t });
+  hub.observe({ session_id: 'b', cwd: '/w/b', mtime: t });
+  t += 15 * 60000;
+  hub.observe({ session_id: 'b', cwd: '/w/b', mtime: t - 1000 });
+  t += 15 * 60000;
+  hub.sweep({ aliveTtys: new Set(['ttys002']) });
+  assert.equal(hub.list().length, 1);
+});
+
+test('이미 열려 있던 claude 를 터미널에서 찾아 붙인다', () => {
+  const t = require('../src/main/terminals');
+  assert.ok(t.isInteractiveClaude('claude --dangerously-skip-permissions --resume abc --remote-control study'));
+  assert.ok(t.isInteractiveClaude('node /opt/homebrew/bin/claude'));
+  assert.ok(!t.isInteractiveClaude('claude -p "요약해 줘"'));
+  assert.ok(!t.isInteractiveClaude('/Applications/CodePup.app/Contents/MacOS/CodePup'));
+  assert.equal(t.sessionIdFromArgs("claude --resume '1b2c3d4e-0000-4000-8000-123456789abc' --rc"), '1b2c3d4e-0000-4000-8000-123456789abc');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codepup-home-'));
+  const { projectDir, recentSessions } = require('../src/main/transcripts');
+  const dir = projectDir(home, '/Users/me/work/my.app');
+  assert.ok(dir.endsWith('-Users-me-work-my-app'));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'old.jsonl'), '{}');
+  fs.writeFileSync(path.join(dir, 'new.jsonl'), '{}');
+  fs.utimesSync(path.join(dir, 'old.jsonl'), new Date(1000), new Date(1000));
+  assert.deepEqual(recentSessions({ home, cwd: '/Users/me/work/my.app' }).map((r) => r.id), ['new', 'old']);
+  const hub = hubWith();
+  hub.attach({ session_id: 'new', cwd: '/Users/me/work/my.app', tty: 'ttys005' });
+  hub.attach({ session_id: 'other', cwd: '/w', tty: 'ttys005' }); // 같은 터미널은 한 번만
+  assert.deepEqual(hub.list().map((s) => [s.id, s.tty]), [['new', 'ttys005']]);
 });
 
 test('다시 열기 명령은 Claude 의 하위 세션 표시를 지우고 실행한다', () => {

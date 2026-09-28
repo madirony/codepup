@@ -293,7 +293,12 @@ class SessionHub extends EventEmitter {
   observe({ session_id, cwd, transcript_path, mtime }) {
     if (!session_id || !cwd) return;
     const isNew = !this.sessions.has(session_id);
-    if (!isNew) return;
+    if (!isNew) {
+      // 대화 기록이 계속 갱신되면 살아 있는 것 (터미널 정보가 없는 세션의 생존 신호)
+      const cur = this.sessions.get(session_id);
+      if (mtime && mtime > (cur.updatedAt || 0)) cur.updatedAt = mtime;
+      return;
+    }
     if (this.history.some((h) => h.id === session_id && h.ended)) return; // 이미 끝난 세션
     const s = this.upsert({ session_id, cwd, transcript_path });
     s.observedAt = mtime || this.now();
@@ -302,15 +307,38 @@ class SessionHub extends EventEmitter {
     this.changed(s, { type: 'discovered' });
   }
 
+  // 터미널에서 돌고 있는 claude 를 직접 찾아 붙이기 (CodePup 을 켜기 전부터 열려 있던 세션도 바로 보이게)
+  // 터미널(tty)을 알아서, 창을 닫으면 바로 정리돼요
+  attach({ session_id, cwd, tty, transcript_path }) {
+    if (!session_id || !cwd || !tty) return;
+    const known = [...this.sessions.values()].find((x) => x.tty === tty);
+    if (known) return; // 이 터미널의 세션은 이미 알고 있음
+    const cur = this.sessions.get(session_id);
+    if (cur) {
+      if (!cur.tty) cur.tty = tty;
+      return;
+    }
+    const s = this.upsert({ session_id, cwd, transcript_path }, { tty });
+    s.activity = '열려 있는 세션';
+    this.changed(s, { type: 'discovered' });
+  }
+
   // 신호가 끊긴 세션 정리 (터미널을 그냥 닫으면 SessionEnd 가 안 올 수 있음)
   // aliveTtys: claude 가 돌고 있는 터미널(tty) 목록. 모르면(null) 오래 조용한 세션만 정리해요.
-  sweep({ aliveTtys = null, graceMs = 60000, idleTimeoutMs = 3 * 60 * 60000 } = {}) {
+  // - claude 가 하나도 안 돌고 있으면(aliveTtys 가 비어 있음) 모든 세션을 정리
+  // - 터미널을 모르는 세션(대화 기록으로만 찾은 세션)은 기록이 멈춘 지 20분이면 정리
+  sweep({ aliveTtys = null, graceMs = 60000, idleTimeoutMs = 3 * 60 * 60000, noTtyTimeoutMs = 20 * 60000 } = {}) {
     const t = this.now();
     for (const s of [...this.sessions.values()]) {
       if (s.pending || s.status === 'working' || s.status === 'permission') continue;
       const lastSignal = s.updatedAt || 0;
+      const quiet = t - lastSignal;
       const tty = String(s.tty || '').replace(/^\/dev\//, '');
-      const gone = aliveTtys && tty ? !aliveTtys.has(tty) && t - lastSignal > graceMs : t - lastSignal > idleTimeoutMs;
+      let gone;
+      if (aliveTtys && aliveTtys.size === 0) gone = quiet > graceMs;
+      else if (aliveTtys && tty) gone = !aliveTtys.has(tty) && quiet > graceMs;
+      else if (!tty) gone = quiet > noTtyTimeoutMs;
+      else gone = quiet > idleTimeoutMs;
       if (gone) {
         s.status = 'ended';
         s.endReason = 'vanished';
