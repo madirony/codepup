@@ -297,7 +297,43 @@
     renderClaude();
   });
   $('cc-panel').addEventListener('click', () => api.menuAction('open-panel'));
-  $('shortcut').textContent = (boot.shortcut || '').replace('CommandOrControl', boot.platform === 'darwin' ? '⌘' : 'Ctrl').replace('Shift', '⇧').replace(/\+/g, ' ');
+  // 세션 보드 단축키: 버튼을 누르고 새 조합을 누르면 바뀜 (다른 앱이 쓰는 키면 알려 줌)
+  let recording = false;
+  function renderShortcut() {
+    const l = window.CodePupKeys.label(settings.panelShortcut);
+    $('shortcut').textContent = l ? `(${l})` : '';
+    $('sc-record').textContent = recording ? '새 단축키를 누르세요… (Esc 취소)' : l || '없음 · 눌러서 정하기';
+    $('sc-off').classList.toggle('hidden', !settings.panelShortcut);
+  }
+  $('sc-record').addEventListener('click', () => {
+    recording = true;
+    renderShortcut();
+  });
+  $('sc-off').addEventListener('click', async () => {
+    await api.setShortcut('');
+    toast('단축키를 껐어요');
+  });
+  window.addEventListener(
+    'keydown',
+    async (e) => {
+      if (!recording) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        recording = false;
+        return renderShortcut();
+      }
+      const accel = window.CodePupKeys.fromEvent(e);
+      if (!accel) return; // 아직 수정키만
+      recording = false;
+      const r = await api.setShortcut(accel);
+      if (r.ok) toast(`세션 보드 단축키: ${window.CodePupKeys.label(accel)}`);
+      else toast(r.error || '그 단축키는 쓸 수 없어요');
+      renderShortcut();
+    },
+    true
+  );
+  renderShortcut();
 
   // ---------- 구독 ----------
   api.onPetState((p) => {
@@ -305,6 +341,7 @@
     renderPet();
   });
   api.onSettings((s) => {
+    setTimeout(renderShortcut);
     const customChanged = JSON.stringify([s.customImages, s.customSounds]) !== JSON.stringify([settings.customImages, settings.customSounds]);
     settings = s;
     fillForm();

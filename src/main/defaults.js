@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS = {
   permissionWaitSec: 60, // 펫에서 권한 요청에 답할 수 있는 시간 (지나면 터미널 창으로)
   restoreRemoteControl: true, // 세션 복구 시 --rc (원격 제어) 켜기
   restoreSkipPermissions: false, // 세션 복구 시 --dangerously-skip-permissions
+  panelShortcut: 'Alt+CommandOrControl+J', // 세션 보드 열기 · 닫기 ('' = 사용 안 함)
   restoreTabs: true, // 쓰던 터미널 창에 탭으로 추가
   restoreTerminal: 'auto', // 'auto' | 'Terminal' | 'iTerm'
   restoreExtraArgs: '',

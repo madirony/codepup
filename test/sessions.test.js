@@ -265,6 +265,16 @@ test('알림 켜기: 훅이 한 번이라도 오면 알림이 켜진 세션', as
   assert.equal(hub.needingReopen().length, 0);
 });
 
+test('세션 보드 단축키: 표시 · 키 입력으로 만들기', () => {
+  const k = require('../src/renderer/shared/keys');
+  assert.equal(k.label('Alt+CommandOrControl+J'), '⌥⌘J');
+  assert.equal(k.fromEvent({ code: 'KeyK', metaKey: true, shiftKey: true }), 'Shift+CommandOrControl+K');
+  assert.equal(k.fromEvent({ code: 'KeyK', shiftKey: true }), ''); // ⇧ 만으로는 안 됨
+  assert.equal(k.fromEvent({ code: 'MetaLeft', metaKey: true }), ''); // 수정키만 누른 중
+  const { DEFAULT_SETTINGS } = require('../src/main/defaults');
+  assert.equal(DEFAULT_SETTINGS.panelShortcut, 'Alt+CommandOrControl+J'); // 노션 ⌘⇧J 와 안 겹치게
+});
+
 test('다시 열기 명령은 Claude 의 하위 세션 표시를 지우고 실행한다', () => {
   const { resumeCommand, cleanEnv } = require('../src/main/terminals');
   const cmd = resumeCommand({ id: 'abc', cwd: '/w/app' });

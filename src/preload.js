@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('codepup', {
   // 설정 창
   menuAction: (name, payload) => ipcRenderer.invoke('menu:action', name, payload),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
+  setShortcut: (accel) => ipcRenderer.invoke('shortcut:set', accel),
   pickMedia: (kind, slot) => ipcRenderer.invoke('media:pick', kind, slot),
   resetMedia: (kind, slot) => ipcRenderer.invoke('media:reset', kind, slot),
   importSkin: () => ipcRenderer.invoke('skins:import'),

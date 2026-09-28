@@ -36,7 +36,7 @@ const TICK_MS = 5000;
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 const SOUND_EXT = ['mp3', 'wav', 'm4a', 'aac', 'ogg'];
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
-const PANEL_SHORTCUT = 'CommandOrControl+Shift+J';
+let activeShortcut = ''; // 지금 등록된 세션 보드 단축키
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -244,6 +244,38 @@ function openPanel({ focusSession, toggle } = {}) {
   });
 }
 
+// ---------- 세션 보드 단축키 ----------
+
+const ACCEL_RE = /^(?:(?:CommandOrControl|Command|Control|Alt|Shift)\+){1,4}(?:[A-Z0-9]|F\d{1,2}|Space|Up|Down|Left|Right|[.,/;])$/;
+
+// 다른 앱이 이미 쓰는 키면 등록이 안 돼요 → 이전 키로 되돌리고 알려 줌
+function applyShortcut(accel) {
+  if (activeShortcut) globalShortcut.unregister(activeShortcut);
+  activeShortcut = '';
+  if (!accel) return { ok: true };
+  if (!ACCEL_RE.test(accel)) return { ok: false, error: '쓸 수 없는 조합이에요' };
+  let ok = false;
+  try {
+    ok = globalShortcut.register(accel, () => openPanel({ toggle: true }));
+  } catch {
+    ok = false;
+  }
+  if (ok) activeShortcut = accel;
+  return ok ? { ok: true } : { ok: false, error: '다른 앱이 이미 쓰고 있는 단축키예요' };
+}
+
+function setShortcut(accel) {
+  const prev = store.settings.panelShortcut;
+  const next = String(accel || '');
+  const r = applyShortcut(next);
+  if (!r.ok) {
+    applyShortcut(prev);
+    return r;
+  }
+  updateSettings({ panelShortcut: next });
+  return { ok: true };
+}
+
 // ---------- 메뉴 막대 팝오버 ----------
 
 const POP_W = 372;
@@ -384,6 +416,7 @@ function sanitizePatch(patch) {
   ]) {
     if (typeof s[key] === 'boolean') out[key] = s[key];
   }
+  if (typeof s.panelShortcut === 'string' && (s.panelShortcut === '' || ACCEL_RE.test(s.panelShortcut))) out.panelShortcut = s.panelShortcut;
   if (Array.isArray(s.phrases)) {
     out.phrases = s.phrases.map((p) => String(p).trim().slice(0, 40)).filter(Boolean).slice(0, 50);
   }
@@ -796,7 +829,7 @@ function registerIpc() {
     origin: ORIGIN,
     version: app.getVersion(),
     platform: process.platform,
-    shortcut: PANEL_SHORTCUT,
+    shortcut: store.settings.panelShortcut,
   }));
 
   ipcMain.on('pet:ignore-mouse', (e, ignore) => {
@@ -833,6 +866,7 @@ function registerIpc() {
   });
 
   ipcMain.handle('settings:update', (_e, patch) => updateSettings(patch));
+  ipcMain.handle('shortcut:set', (_e, accel) => setShortcut(accel));
   ipcMain.handle('media:pick', (_e, kind, slot) => pickMedia(kind, slot));
   ipcMain.handle('media:reset', (_e, kind, slot) => resetMedia(kind, slot));
   ipcMain.handle('skins:import', () => importSkin());
@@ -1037,7 +1071,7 @@ app.whenReady().then(async () => {
   setInterval(() => awake.refreshLid(), 60000);
   evaluateAwake();
 
-  globalShortcut.register(PANEL_SHORTCUT, () => openPanel({ toggle: true }));
+  applyShortcut(store.settings.panelShortcut);
 
   screen.on('display-metrics-changed', fitPetWindow);
   screen.on('display-added', fitPetWindow);

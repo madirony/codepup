@@ -9,6 +9,7 @@
   let restorable = boot.sessions.restorable;
   let claude = boot.claude;
   const expanded = new Set(); // 펼쳐 둔 세션
+  const picked = new Set(); // 다시 열려고 고른 닫힌 세션
   let filter = '';
   let focusId = decodeURIComponent(location.hash.slice(1)) || null;
   const $ = (id) => document.getElementById(id);
@@ -191,10 +192,21 @@
     $('restore-hint').textContent = settings.restoreRemoteControl
       ? '원격 제어(--rc)를 켠 채로 터미널 탭에서 이어서 열어요.'
       : '터미널 탭에서 claude --resume 으로 이어서 열어요.';
+    for (const id of [...picked]) if (!restorable.some((h) => h.id === id)) picked.delete(id);
+    $('restore-all').textContent = picked.size ? `선택한 ${picked.size}개 열기` : '전부 다시 열기';
     $('restore-list').replaceChildren(
       ...restorable.slice(0, 12).map((h) => {
         const row = el('div', 'restore-item');
-        row.append(el('span', 'name', h.name), el('span', 'ago', ago(h.lastSeen)));
+        const cb = el('input');
+        cb.type = 'checkbox';
+        cb.checked = picked.has(h.id);
+        cb.title = '골라서 한 번에 열기';
+        cb.addEventListener('change', () => {
+          if (cb.checked) picked.add(h.id);
+          else picked.delete(h.id);
+          render();
+        });
+        row.append(cb, el('span', 'name', h.name), el('span', 'ago', ago(h.lastSeen)));
         row.append(button('열기', '', async () => report(await api.restoreSessions([h.id]))));
         row.append(button('✕', 'icon', async () => {
           await api.forgetSession(h.id);
@@ -248,7 +260,11 @@
     if (r.ok) toast(`${r.reopened}개 세션을 다시 열었어요 · 이제 알림이 와요`);
     else if (!r.canceled) toast(r.error || (r.errors || []).join(' / ') || '다시 열지 못했어요');
   });
-  $('restore-all').addEventListener('click', async () => report(await api.restoreSessions(null)));
+  $('restore-all').addEventListener('click', async () => {
+    const ids = picked.size ? [...picked] : null; // 고른 게 없으면 전부 (확인 창)
+    picked.clear();
+    report(await api.restoreSessions(ids));
+  });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') api.closePanel();
   });

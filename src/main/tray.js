@@ -176,7 +176,7 @@ class PetTray {
     const restorable = (sessions && sessions.restorable) || [];
     const icon = (s) =>
       s.pending && s.pending.kind === 'permission' ? '🔔' : s.status === 'working' ? '⚙️' : s.status === 'done' ? '✅' : '💤';
-    items.push({ label: `🗂  세션 보드 열기${list.length ? `  (${list.length})` : ''}`, click: act('open-panel'), accelerator: 'CommandOrControl+Shift+J' });
+    items.push({ label: `🗂  세션 보드 열기${list.length ? `  (${list.length})` : ''}`, click: act('open-panel'), ...(settings.panelShortcut ? { accelerator: settings.panelShortcut } : {}) });
     // 세션이 많아도 메뉴가 길어지지 않게: 허락 대기 → 작업 중 → 끝남 순으로 5개까지만, 나머지는 보드에서
     const MENU_MAX = 5;
     const rank = (s) => (s.pending ? 0 : s.status === 'working' ? 1 : s.status === 'done' ? 2 : 3);

@@ -170,6 +170,16 @@ app.whenReady().then(async () => {
   await wait(800);
   const restore = await panel.webContents.executeJavaScript(`document.querySelector('#restore-box').classList.contains('hidden') ? '' : document.querySelector('#restore-list').innerText`);
   check('닫힌 세션이 "다시 열기" 목록에 뜬다', restore.includes('api-server'), restore.replace(/\n/g, ' '));
+  // 팝오버에서 닫힌 세션을 골라서 열기
+  await run(`window.codepup.menuAction('toggle-popover', {})`);
+  await wait(1200);
+  const pop2 = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/popover/'));
+  if (pop2) {
+    const pickInfo = await pop2.webContents.executeJavaScript(`(async () => { document.querySelector('#restore').click(); await new Promise((r) => setTimeout(r, 200)); const rows = document.querySelectorAll('#pick .pick-row'); const before = document.querySelector('#pick-open').textContent; rows[0] && rows[0].querySelector('input').click(); await new Promise((r) => setTimeout(r, 200)); return { rows: rows.length, before, after: document.querySelector('#pick-open').textContent }; })()`);
+    check('팝오버: 닫힌 세션을 골라서 열 수 있다', pickInfo.rows >= 1 && pickInfo.after.includes('1개'), JSON.stringify(pickInfo));
+    await shot(pop2, '05b-popover-pick.png');
+    pop2.hide();
+  }
   await shot(panel, '05-panel-restore.png');
 
   // 8) 기존 상호작용: 연타 → 화남, 던지기 → 어지러움

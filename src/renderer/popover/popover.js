@@ -11,6 +11,8 @@
   let awake = boot.awake || {};
   let claude = boot.claude;
   const cpuHist = [];
+  let picking = false; // 닫힌 세션 고르는 중
+  const picked = new Set();
   const $ = (id) => document.getElementById(id);
 
   const el = (tag, cls, text) => {
@@ -111,6 +113,7 @@
   function render() {
     $('avatar').src = avatarUrl();
     $('name').textContent = settings.name;
+    $('board-key').textContent = window.CodePupKeys.label(settings.panelShortcut);
     const asks = sessions.filter((s) => s.pending && s.pending.kind === 'permission');
     const working = sessions.filter((s) => s.status === 'working').length;
     $('summary').textContent = !sessions.length
@@ -129,9 +132,36 @@
     const rest = sessions.filter((s) => !(s.pending && s.pending.kind === 'permission')).sort((a, b) => rank(a) - rank(b) || b.updatedAt - a.updatedAt);
     $('list').replaceChildren(...(rest.length ? rest.map(row) : [el('div', 'empty', sessions.length ? '다른 세션은 없어요' : '터미널에서 claude 를 실행하면 여기에 떠요')]));
 
+    // 닫힌 세션 고르기 (일부만 열 수 있게)
+    if (picking && !restorable.length) picking = false;
+    for (const id of [...picked]) if (!restorable.some((h) => h.id === id)) picked.delete(id);
+    $('pick-box').classList.toggle('hidden', !picking);
+    $('restore').classList.toggle('active', picking);
+    if (picking) {
+      $('pick').replaceChildren(
+        ...restorable.map((h) => {
+          const r = el('label', 'pick-row');
+          const cb = el('input');
+          cb.type = 'checkbox';
+          cb.checked = picked.has(h.id);
+          cb.addEventListener('change', () => {
+            if (cb.checked) picked.add(h.id);
+            else picked.delete(h.id);
+            render();
+          });
+          const why = h.endReason === 'vanished' ? '갑자기 꺼짐' : '창을 닫음';
+          r.append(cb, el('b', '', h.name), el('span', 's', `${why} · ${ago(h.lastSeen)}`));
+          return r;
+        })
+      );
+      $('pick-open').disabled = !picked.size;
+      $('pick-open').textContent = picked.size ? `선택한 ${picked.size}개 열기` : '열 세션을 골라요';
+      $('pick-all').textContent = picked.size === restorable.length ? '모두 해제' : '모두 선택';
+    }
+
     // 아래 버튼
     $('restore').disabled = !restorable.length;
-    $('restore-sub').textContent = restorable.length ? `${restorable.length}개 다시 열기` : '없음';
+    $('restore-sub').textContent = restorable.length ? `${restorable.length}개 · 골라서 열기` : '없음';
     const autoOn = settings.keepAwake !== false;
     const on = autoOn || settings.keepAwakeManual;
     $('awake-box').classList.toggle('on', !!awake.active);
@@ -181,7 +211,25 @@
   $('muted-btn').addEventListener('click', () => api.reopenForHooks(null));
   $('restore').addEventListener('click', () => {
     if (!restorable.length) return;
-    api.restoreSessions(null);
+    picking = !picking;
+    render();
+  });
+  $('pick-all').addEventListener('click', () => {
+    if (picked.size === restorable.length) picked.clear();
+    else restorable.forEach((h) => picked.add(h.id));
+    render();
+  });
+  $('pick-cancel').addEventListener('click', () => {
+    picking = false;
+    render();
+  });
+  $('pick-open').addEventListener('click', async () => {
+    if (!picked.size) return;
+    const ids = [...picked];
+    picked.clear();
+    picking = false;
+    render();
+    await api.restoreSessions(ids);
     api.closePopover();
   });
   $('awake').addEventListener('click', () => api.menuAction('awake-toggle', {}));

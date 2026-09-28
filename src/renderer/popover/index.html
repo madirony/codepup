@@ -38,8 +38,17 @@
     </div>
 
     <section>
-      <div class="sec"><span>세션</span><button id="board" class="link">⌘⇧J 크게 보기</button></div>
+      <div class="sec"><span>세션</span><button id="board" class="link">크게 보기 <span id="board-key"></span></button></div>
       <div id="list" class="list"></div>
+    </section>
+
+    <section id="pick-box" class="hidden">
+      <div class="sec"><span>🔁 다시 열 세션 고르기</span><button id="pick-all" class="link">모두 선택</button></div>
+      <div id="pick" class="list"></div>
+      <div class="btns pick-btns">
+        <button id="pick-open" class="btn ok">선택한 세션 열기</button>
+        <button id="pick-cancel" class="btn">닫기</button>
+      </div>
     </section>
 
     <footer class="foot">
@@ -52,6 +61,7 @@
     </footer>
   </div>
   <script src="../shared/md.js"></script>
+  <script src="../shared/keys.js"></script>
   <script src="popover.js"></script>
 </body>
 </html>

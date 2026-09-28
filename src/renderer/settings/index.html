@@ -67,8 +67,13 @@
         <div class="actions">
           <button id="cc-connect">🔌 연결하기</button>
           <button id="cc-disconnect" class="ghost hidden">연결 해제</button>
-          <button id="cc-panel" class="ghost">🗂 세션 보드 열기 (<span id="shortcut"></span>)</button>
+          <button id="cc-panel" class="ghost">🗂 세션 보드 열기 <span id="shortcut"></span></button>
         </div>
+        <div class="row">세션 보드 단축키
+          <button id="sc-record" class="ghost" title="누른 뒤 새 단축키를 눌러요"></button>
+          <button id="sc-off" class="ghost">사용 안 함</button>
+        </div>
+        <p class="muted" id="sc-hint">버튼을 누르고 새 단축키(⌘ · ⌥ · ⌃ 중 하나 + 글자)를 눌러요. 다른 앱과 겹치면 바꿔 주세요.</p>
       </div>
       <div class="card">
         <h3>☕ 잠자기 방지</h3>
@@ -190,6 +195,7 @@
     </section>
   </main>
   <script src="../pet/voice.js"></script>
+  <script src="../shared/keys.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

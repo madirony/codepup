@@ -506,3 +506,8 @@ h2 {
   font-size: 12px;
   white-space: nowrap;
 }
+
+.restore-item input[type='checkbox'] {
+  margin: 0 2px 0 0;
+  accent-color: var(--accent);
+}
