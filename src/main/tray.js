@@ -1,6 +1,6 @@
 // RunCat처럼 CPU 사용률에 맞춰 달리는 메뉴 막대 아이콘 + 시스템 상태 텍스트.
 const { Tray, Menu, nativeImage } = require('electron');
-// 세션 보드 · 자리 비움 · 세션 복구 메뉴도 여기서 만듭니다.
+// 세션 보드 · 세션 복구 메뉴도 여기서 만듭니다.
 
 const GB = 1024 ** 3;
 const fmtGB = (bytes) => (bytes / GB >= 100 ? Math.round(bytes / GB) : (bytes / GB).toFixed(1)) + 'GB';
