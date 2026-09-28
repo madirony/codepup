@@ -205,6 +205,8 @@ function openPanel({ focusSession, toggle } = {}) {
       panelWin.hide();
       return;
     }
+    panelWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    panelWin.setAlwaysOnTop(true, 'floating');
     panelWin.show();
     panelWin.focus();
     if (focusSession) panelWin.webContents.send('panel:focus', focusSession);
@@ -233,7 +235,7 @@ function openPanel({ focusSession, toggle } = {}) {
     webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true },
   });
   panelWin.setAlwaysOnTop(true, 'floating');
-  panelWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  panelWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   panelWin.loadURL(`${ORIGIN}/src/renderer/panel/index.html${focusSession ? '#' + encodeURIComponent(focusSession) : ''}`);
   panelWin.once('ready-to-show', () => {
     panelWin.show();
@@ -299,6 +301,9 @@ function togglePopover(bounds) {
     if (popWin.isVisible()) return popWin.hide();
     if (Date.now() - popHiddenAt < 300) return; // 아이콘을 다시 눌러 닫은 경우 (blur 로 먼저 숨겨짐)
     placePopover(bounds);
+    // 전체 화면 앱 위에서도 뜨도록 매번 다시 지정 (창이 처음 만든 스페이스에 묶이지 않게)
+    popWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    popWin.setAlwaysOnTop(true, 'pop-up-menu');
     popWin.show();
     popWin.focus();
     if (process.platform === 'darwin') app.focus({ steal: true }); // Dock 이 없는 앱이라 포커스를 가져와야 바깥 클릭으로 닫혀요
@@ -322,7 +327,7 @@ function togglePopover(bounds) {
     webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true },
   });
   popWin.setAlwaysOnTop(true, 'pop-up-menu');
-  popWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  popWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   popWin.loadURL(`${ORIGIN}/src/renderer/popover/index.html`);
   popWin.on('blur', () => {
     if (popWin && !popWin.isDestroyed() && !popWin.webContents.isDevToolsOpened()) {
@@ -335,6 +340,9 @@ function togglePopover(bounds) {
   });
   popWin.once('ready-to-show', () => {
     placePopover(bounds);
+    // 전체 화면 앱 위에서도 뜨도록 매번 다시 지정 (창이 처음 만든 스페이스에 묶이지 않게)
+    popWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    popWin.setAlwaysOnTop(true, 'pop-up-menu');
     popWin.show();
     popWin.focus();
     if (process.platform === 'darwin') app.focus({ steal: true });
