@@ -55,14 +55,12 @@ const DEFAULT_SETTINGS = {
   showOnFullscreen: false,
   launchAtLogin: false,
   hidden: false,
-  tray: { cpu: true, mem: false, disk: false, battery: false, animate: true, sessions: true },
+  tray: { cpu: false, mem: false, disk: false, battery: false, animate: true, sessions: true, awake: false },
   keepAwake: true, // ☕ Claude 가 일하는 동안 맥이 잠들지 않게
   keepAwakeMode: 'open', // 'open' = 세션이 열려 있으면(원격 작업용) · 'working' = 일할 때만
   keepAwakeManual: false, // 계속 깨어 있기 (앱을 다시 켜도 유지)
   // Claude Code 연동
-  awayMode: false, // 자리 비움: 작업이 끝나면 펫에서 다음 지시를 기다림
   permissionWaitSec: 60, // 펫에서 권한 요청에 답할 수 있는 시간 (지나면 터미널 창으로)
-  replyWaitMin: 30, // 자리 비움 모드에서 기다리는 시간
   restoreRemoteControl: true, // 세션 복구 시 --rc (원격 제어) 켜기
   restoreSkipPermissions: false, // 세션 복구 시 --dangerously-skip-permissions
   restoreTabs: true, // 쓰던 터미널 창에 탭으로 추가

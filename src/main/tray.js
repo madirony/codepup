@@ -77,16 +77,13 @@ class PetTray {
     const t = settings.tray;
     const parts = [];
     const c = this.state.sessions && this.state.sessions.counts;
-    if (c && t.sessions !== false) {
-      const waiting = c.permission + c.reply;
-      if (waiting) parts.push(`🔔${waiting}`);
-      else if (c.working) parts.push(`⚙️${c.working}`);
-    }
-    if (this.state.awake && this.state.awake.active) parts.push('☕');
-    if (t.cpu) parts.push(`CPU ${stats.cpu}%`);
-    if (t.mem) parts.push(`MEM ${stats.mem.percent}%`);
-    if (t.disk && stats.disk) parts.push(`SSD ${stats.disk.percent}%`);
-    if (t.battery && stats.battery) parts.push(`${stats.battery.charging ? '⚡' : '🔋'}${stats.battery.percent}%`);
+    // 평소엔 아이콘만 (달리는 속도가 CPU). 허락을 기다리는 세션이 있을 때만 숫자가 붙어요.
+    if (c && t.sessions !== false && c.permission) parts.push(`🔔${c.permission}`);
+    if (t.awake && this.state.awake && this.state.awake.active) parts.push('☕');
+    if (t.cpu) parts.push(`${stats.cpu}%`);
+    if (t.mem) parts.push(`M${stats.mem.percent}%`);
+    if (t.disk && stats.disk) parts.push(`D${stats.disk.percent}%`);
+    if (t.battery && stats.battery) parts.push(`${stats.battery.charging ? '⚡' : ''}${stats.battery.percent}%`);
     return parts.join(' ');
   }
 
@@ -144,7 +141,8 @@ class PetTray {
           { label: '메모리', type: 'checkbox', checked: settings.tray.mem, click: toggleTray('mem') },
           { label: '저장공간', type: 'checkbox', checked: settings.tray.disk, click: toggleTray('disk') },
           { label: '배터리', type: 'checkbox', checked: settings.tray.battery, click: toggleTray('battery') },
-          { label: 'Claude 세션 알림 개수', type: 'checkbox', checked: settings.tray.sessions !== false, click: toggleTray('sessions') },
+          { label: '허락 기다리는 세션 수 (🔔)', type: 'checkbox', checked: settings.tray.sessions !== false, click: toggleTray('sessions') },
+          { label: '잠자기 방지 중 (☕)', type: 'checkbox', checked: !!settings.tray.awake, click: toggleTray('awake') },
           { type: 'separator' },
           { label: '아이콘 달리기 애니메이션', type: 'checkbox', checked: settings.tray.animate, click: toggleTray('animate') },
         ],
@@ -164,7 +162,7 @@ class PetTray {
     const list = (sessions && sessions.list) || [];
     const restorable = (sessions && sessions.restorable) || [];
     const icon = (s) =>
-      s.pending && s.pending.kind === 'permission' ? '🔔' : s.pending && s.pending.kind === 'reply' ? '💬' : s.status === 'working' ? '⚙️' : s.status === 'done' ? '✅' : '💤';
+      s.pending && s.pending.kind === 'permission' ? '🔔' : s.status === 'working' ? '⚙️' : s.status === 'done' ? '✅' : '💤';
     items.push({ label: `🗂  세션 보드 열기${list.length ? `  (${list.length})` : ''}`, click: act('open-panel'), accelerator: 'CommandOrControl+Shift+J' });
     for (const s of list.slice(0, 8)) {
       items.push({ label: `     ${icon(s)}  ${s.name}  ·  ${s.activity || s.status}`.slice(0, 80), click: act('open-panel', { sessionId: s.id }) });
@@ -187,12 +185,6 @@ class PetTray {
     });
     items.push({ label: '     지금부터 계속 깨어 있기', type: 'checkbox', checked: !!settings.keepAwakeManual, click: (i) => this.onAction('awake-manual', { value: i.checked }) });
     items.push({ label: `     🧳 덮개 닫아도 안 잠들기 (외출용)${aw.lid ? '  · 켜짐' : ''}`, type: 'checkbox', checked: !!aw.lid, click: (i) => this.onAction('awake-lid', { value: i.checked }) });
-    items.push({
-      label: '🏠  자리 비움 모드 (펫에서 답장)',
-      type: 'checkbox',
-      checked: !!settings.awayMode,
-      click: (i) => this.onAction('away-toggle', { value: i.checked }),
-    });
     if (restorable.length) {
       items.push({
         label: `🔁  닫힌 세션 다시 열기 (${restorable.length})`,

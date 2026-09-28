@@ -15,9 +15,6 @@
         <h1>세션 보드</h1>
         <p id="summary">세션을 기다리는 중…</p>
       </div>
-      <label class="away" title="작업이 끝나면 터미널 대신 여기서 다음 지시를 보낼 수 있어요">
-        <input id="away" type="checkbox"><span>자리 비움</span>
-      </label>
       <button id="close" class="icon" title="닫기 (⌘⇧J)">✕</button>
     </header>
 
@@ -28,6 +25,7 @@
       <button id="connect-btn" class="primary">연결하기</button>
     </div>
 
+    <input id="filter" class="filter hidden" type="search" placeholder="🔎 세션 찾기 (이름 · 폴더)">
     <main id="list"></main>
 
     <section id="restore-box" class="hidden">
@@ -40,6 +38,7 @@
     </section>
   </div>
   <div id="toast" class="hidden"></div>
+  <script src="../shared/md.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

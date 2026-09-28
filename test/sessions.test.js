@@ -9,7 +9,7 @@ const { Bridge, HOOK_EVENTS } = require('../src/main/bridge');
 const { resumeCommand } = require('../src/main/terminals');
 
 const base = { session_id: 's1', cwd: '/Users/me/work/my-app', transcript_path: '/tmp/t.jsonl' };
-const hubWith = (settings = {}) => new SessionHub({ getSettings: () => ({ permissionWaitSec: 60, replyWaitMin: 30, ...settings }) });
+const hubWith = (settings = {}) => new SessionHub({ getSettings: () => ({ permissionWaitSec: 60, ...settings }) });
 
 test('세션이 시작되면 폴더 이름으로 보드에 나타난다', async () => {
   const hub = hubWith();
@@ -62,29 +62,23 @@ test('권한 요청: 응답이 없거나 훅이 취소되면 아무것도 돌려
 });
 
 test('작업 완료: 평소에는 알리기만 하고 바로 끝난다', async () => {
-  const hub = hubWith({ awayMode: false });
+  const hub = hubWith();
   const out = await hub.handle('Stop', { ...base, last_assistant_message: '리팩터링 끝났어요!' });
   assert.equal(out, null);
   assert.equal(hub.list()[0].status, 'done');
   assert.equal(hub.list()[0].lastMessage, '리팩터링 끝났어요!');
 });
 
-test('자리 비움 모드: 펫에서 보낸 다음 지시가 세션으로 이어진다', async () => {
-  const hub = hubWith({ awayMode: true });
-  const p = hub.handle('Stop', { ...base, last_assistant_message: '끝!' });
-  assert.equal(hub.list()[0].pending.kind, 'reply');
-  assert.ok(hub.reply('s1', '이제 테스트도 추가해 줘'));
-  const out = await p;
-  assert.equal(out.hookSpecificOutput.hookEventName, 'Stop');
-  assert.match(out.hookSpecificOutput.additionalContext, /테스트도 추가해 줘/);
-  assert.equal(hub.list()[0].status, 'working');
-});
-
-test('자리 비움 모드: "터미널에서 할게요"를 누르면 대기를 푼다', async () => {
-  const hub = hubWith({ awayMode: true });
-  const p = hub.handle('Stop', { ...base, last_assistant_message: '끝!' });
-  assert.ok(hub.release('s1'));
-  assert.equal(await p, null);
+test('마크다운: 보드에는 HTML 로, 말풍선에는 기호 없는 첫 문장으로', () => {
+  const md = require('../src/renderer/shared/md');
+  const text = '## 결과\n로그인 API를 **만들었어요**. `/auth/login` 추가.\n\n- 항목\n<script>alert(1)</script>';
+  const html = md.toHtml(text);
+  assert.match(html, /<b>만들었어요<\/b>/);
+  assert.match(html, /<code>\/auth\/login<\/code>/);
+  assert.match(html, /<ul><li>항목<\/li><\/ul>/);
+  assert.ok(!html.includes('<script>'));
+  assert.equal(md.summary(text), '로그인 API를 만들었어요.');
+  assert.equal(md.summary('# 제목만'), '제목만');
 });
 
 test('세션 간 공유: 다음 프롬프트에 다른 세션의 결과가 붙는다', async () => {

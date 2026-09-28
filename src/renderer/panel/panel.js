@@ -8,13 +8,13 @@
   let sessions = boot.sessions.list;
   let restorable = boot.sessions.restorable;
   let claude = boot.claude;
-  const drafts = new Map(); // 세션별 작성 중인 답장
+  const expanded = new Set(); // 펼쳐 둔 세션
+  let filter = '';
   let focusId = decodeURIComponent(location.hash.slice(1)) || null;
   const $ = (id) => document.getElementById(id);
 
   const STATUS = {
     permission: ['permission', '🔔 허락 대기'],
-    reply: ['reply', '💬 답장 대기'],
     working: ['working', '⚙️ 작업 중'],
     done: ['done', '✅ 완료'],
     waiting: ['waiting', '⏳ 입력 대기'],
@@ -23,7 +23,6 @@
 
   function statusOf(s) {
     if (s.pending && s.pending.kind === 'permission') return STATUS.permission;
-    if (s.pending && s.pending.kind === 'reply') return STATUS.reply;
     return STATUS[s.status] || STATUS.idle;
   }
 
@@ -68,57 +67,66 @@
 
   // ---------- 카드 ----------
 
+  const md = window.CodePupMd;
+  const RANK = { permission: 0, working: 1, done: 2, waiting: 3, idle: 4 };
+  const rank = (s) => (s.pending ? 0 : RANK[s.status] ?? 5);
+
+  function mdBox(text) {
+    const box = el('div', 'md');
+    box.innerHTML = md.toHtml(text); // md.js 가 모든 글자를 이스케이프한 뒤 태그만 붙임
+    return box;
+  }
+
+  // 허락 대기: 크게
   function card(s) {
     const [cls, label] = statusOf(s);
-    const c = el('div', 'card' + (s.pending ? ' attn' : '') + (s.id === focusId ? ' focus' : ''));
+    const c = el('div', 'card attn' + (s.id === focusId ? ' focus' : ''));
     c.dataset.id = s.id;
-
     const top = el('div', 'row');
     top.append(el('span', `chip ${cls}`, label), el('span', 'name', s.name), el('span', 'ago', ago(s.updatedAt)));
     c.append(top, el('div', 'cwd', shortPath(s.cwd)));
-    if (s.activity && !s.pending) c.append(el('div', 'activity', s.activity));
+    const box = el('div', 'ask');
+    box.append(el('b', '', `${s.pending.title} 해도 될까요?`));
+    if (s.pending.detail) box.append(el('pre', '', s.pending.detail));
+    const btns = el('div', 'btns');
+    btns.append(button('허락', 'ok', () => decide(s.id, 'allow')));
+    if (s.pending.canAlways) btns.append(button('항상 허락', '', () => decide(s.id, 'always')));
+    btns.append(button('거절', '', () => decide(s.id, 'deny')));
+    btns.append(button('터미널', 'ghost', () => focus(s.id)));
+    btns.append(el('span', 'spacer'));
+    const cd = el('span', 'countdown');
+    cd.dataset.expires = s.pending.expiresAt;
+    btns.append(cd);
+    box.append(btns);
+    c.append(box);
+    return c;
+  }
 
-    if (s.pending && s.pending.kind === 'permission') {
-      const box = el('div', 'ask');
-      box.append(el('b', '', `${s.pending.title} 해도 될까요?`));
-      if (s.pending.detail) box.append(el('pre', '', s.pending.detail));
-      const btns = el('div', 'btns');
-      btns.append(button('허락', 'ok', () => decide(s.id, 'allow')));
-      if (s.pending.canAlways) btns.append(button('항상 허락', '', () => decide(s.id, 'always')));
-      btns.append(button('거절', '', () => decide(s.id, 'deny')));
-      btns.append(el('span', 'spacer'));
-      const cd = el('span', 'countdown');
-      cd.dataset.expires = s.pending.expiresAt;
-      btns.append(cd);
-      box.append(btns);
-      c.append(box);
-    } else if (s.pending && s.pending.kind === 'reply') {
-      if (s.lastMessage) c.append(el('div', 'message', s.lastMessage));
-      const ta = el('textarea');
-      ta.placeholder = '다음 지시를 입력하세요 (Enter 보내기 · Shift+Enter 줄바꿈)';
-      ta.value = drafts.get(s.id) || '';
-      ta.addEventListener('input', () => drafts.set(s.id, ta.value));
-      ta.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-          e.preventDefault();
-          send(s.id, ta.value);
-        }
-      });
-      const btns = el('div', 'btns');
-      btns.append(button('보내기', 'primary', () => send(s.id, ta.value)));
-      btns.append(button('터미널에서 할게요', 'ghost', () => release(s.id)));
-      btns.append(el('span', 'spacer'));
-      const cd = el('span', 'countdown');
-      cd.dataset.expires = s.pending.expiresAt;
-      btns.append(cd);
-      c.append(ta, btns);
-    } else if (s.status === 'done' && s.lastMessage) {
-      c.append(el('div', 'message', s.lastMessage));
-      if (!settings.awayMode) c.append(el('div', 'hint', '💡 자리 비움을 켜 두면 작업이 끝났을 때 여기서 바로 다음 지시를 보낼 수 있어요.'));
-    }
+  // 나머지: 한 줄 (누르면 마지막 답변 · 공유 · 터미널)
+  function line(s) {
+    const [cls, label] = statusOf(s);
+    const open = expanded.has(s.id);
+    const item = el('div', 'line' + (open ? ' open' : '') + (s.id === focusId ? ' focus' : ''));
+    item.dataset.id = s.id;
+    const head = el('div', 'line-head');
+    head.title = shortPath(s.cwd);
+    const dot = el('span', `dot ${cls}`);
+    dot.title = label;
+    const sub = s.status === 'done' && s.lastMessage ? md.summary(s.lastMessage, 60) : s.activity || label;
+    head.append(dot, el('span', 'name', s.name), el('span', 'sub', sub), el('span', 'ago', ago(s.updatedAt)));
+    head.addEventListener('click', () => {
+      if (open) expanded.delete(s.id);
+      else expanded.add(s.id);
+      render();
+    });
+    item.append(head);
+    if (!open) return item;
 
-    // 하단: 터미널 이동 · 결과 공유
-    const foot = el('div', 'btns footer');
+    const body = el('div', 'line-body');
+    body.append(el('div', 'cwd', shortPath(s.cwd)));
+    if (s.lastPrompt) body.append(el('div', 'prompt', `🙋 ${s.lastPrompt}`));
+    if (s.lastMessage) body.append(mdBox(s.lastMessage));
+    const foot = el('div', 'btns');
     foot.append(button('터미널로 이동', 'ghost', () => focus(s.id)));
     const others = sessions.filter((o) => o.id !== s.id);
     if (s.lastMessage && others.length) {
@@ -128,36 +136,22 @@
       sel.addEventListener('change', async () => {
         if (!sel.value) return;
         const r = await api.share(s.id, sel.value);
-        toast(r.ok ? (r.delivered === 'now' ? '바로 전달했어요!' : '다음 대화에 붙여서 전달할게요') : r.error);
+        toast(r.ok ? '다음 대화에 붙여서 전달할게요' : r.error);
         sel.value = '';
       });
       foot.append(sel);
     }
     if (s.sharedQueued) foot.append(el('span', 'countdown', `📎 공유 ${s.sharedQueued}건 대기`));
-    c.append(foot);
-    return c;
+    body.append(foot);
+    item.append(body);
+    return item;
   }
-
 
   // ---------- 동작 ----------
 
   async function decide(id, decision) {
     const ok = await api.decide(id, decision);
     toast(ok ? { allow: '허락했어요!', always: '앞으로도 허락할게요', deny: '거절했어요' }[decision] : '이미 처리된 요청이에요');
-  }
-
-  async function send(id, text) {
-    if (!String(text).trim()) return;
-    const ok = await api.reply(id, text);
-    if (ok) {
-      drafts.delete(id);
-      toast('전달했어요! 다시 일하러 가요 🐾');
-    } else toast('이 세션은 지금 답장을 기다리지 않아요');
-  }
-
-  async function release(id) {
-    await api.release(id);
-    toast('터미널로 돌려보냈어요');
   }
 
   async function focus(id) {
@@ -168,38 +162,45 @@
   // ---------- 그리기 ----------
 
   function render() {
-    const active = document.activeElement;
-    const activeId = active && active.closest && active.closest('.card') ? active.closest('.card').dataset.id : null;
-    const selStart = active && active.selectionStart;
-
     $('avatar').src = avatarUrl();
     const waiting = sessions.filter((s) => s.pending).length;
     const working = sessions.filter((s) => s.status === 'working').length;
     $('summary').textContent = sessions.length
-      ? `세션 ${sessions.length}개 · ${waiting ? `🔔 ${waiting}개가 기다려요` : working ? `⚙️ ${working}개 작업 중` : '모두 한가해요'}`
+      ? `세션 ${sessions.length}개 · ${waiting ? `🔔 ${waiting}개가 허락을 기다려요` : working ? `⚙️ ${working}개 작업 중` : '모두 한가해요'}`
       : 'Claude Code 세션을 시작하면 여기에 나타나요';
-    $('away').checked = !!settings.awayMode;
-    $('away').closest('.away').classList.toggle('on', !!settings.awayMode);
     $('connect').classList.toggle('hidden', !!(claude && claude.installed));
+    $('filter').classList.toggle('hidden', sessions.length < 6 && !filter);
 
     const list = $('list');
-    // 기다리는 세션을 위로
-    const sorted = [...sessions].sort((a, b) => (b.pending ? 1 : 0) - (a.pending ? 1 : 0) || b.updatedAt - a.updatedAt);
-    if (!sorted.length) {
+    const q = filter.trim().toLowerCase();
+    const shown = sessions
+      .filter((s) => !q || `${s.name} ${s.cwd} ${s.activity}`.toLowerCase().includes(q))
+      .sort((a, b) => rank(a) - rank(b) || b.updatedAt - a.updatedAt);
+    if (focusId) expanded.add(focusId);
+    const asks = shown.filter((s) => s.pending && s.pending.kind === 'permission');
+    const rest = shown.filter((s) => !(s.pending && s.pending.kind === 'permission'));
+    if (!sessions.length) {
       const empty = el('div', 'empty');
       const img = el('img');
       img.src = avatarUrl();
       empty.append(img, el('p', '', '아직 열린 세션이 없어요.'), el('p', '', '터미널에서 claude 를 실행하면 제가 지켜볼게요!'));
       list.replaceChildren(empty);
     } else {
-      list.replaceChildren(...sorted.map(card));
+      const parts = [...asks.map(card)];
+      if (rest.length) {
+        const box = el('div', 'lines');
+        box.append(...rest.map(line));
+        parts.push(box);
+      }
+      if (!shown.length) parts.push(el('p', 'muted pad', '검색 결과가 없어요'));
+      list.replaceChildren(...parts);
     }
 
     // 닫힌 세션 (rcup)
     $('restore-box').classList.toggle('hidden', !restorable.length);
     $('restore-hint').textContent = settings.restoreRemoteControl
-      ? '원격 제어(--rc)를 켠 채로 새 터미널 창에서 이어서 열어요.'
-      : '새 터미널 창에서 claude --resume 으로 이어서 열어요.';
+      ? '원격 제어(--rc)를 켠 채로 터미널 탭에서 이어서 열어요.'
+      : '터미널 탭에서 claude --resume 으로 이어서 열어요.';
     $('restore-list').replaceChildren(
       ...restorable.slice(0, 12).map((h) => {
         const row = el('div', 'restore-item');
@@ -213,21 +214,9 @@
       })
     );
 
-    // 입력 중이던 곳으로 포커스 복원
-    if (activeId) {
-      const ta = list.querySelector(`.card[data-id="${CSS.escape(activeId)}"] textarea`);
-      if (ta) {
-        ta.focus();
-        if (Number.isFinite(selStart)) ta.setSelectionRange(selStart, selStart);
-      }
-    }
     if (focusId) {
-      const target = list.querySelector(`.card[data-id="${CSS.escape(focusId)}"]`);
-      if (target) {
-        target.scrollIntoView({ block: 'nearest' });
-        const ta = target.querySelector('textarea');
-        if (ta && !activeId) ta.focus();
-      }
+      const target = list.querySelector(`[data-id="${CSS.escape(focusId)}"]`);
+      if (target) target.scrollIntoView({ block: 'nearest' });
       focusId = null;
     }
     tickCountdowns();
@@ -255,7 +244,11 @@
   // ---------- 이벤트 ----------
 
   $('close').addEventListener('click', () => api.closePanel());
-  $('away').addEventListener('change', (e) => api.menuAction('away-toggle', { value: e.target.checked }));
+  $('filter').addEventListener('input', (e) => {
+    filter = e.target.value;
+    render();
+    e.target.focus();
+  });
   $('connect-btn').addEventListener('click', async () => {
     const r = await api.connectClaude();
     toast(r.ok ? '연결했어요! 새로 여는 세션부터 적용돼요' : r.error || '연결하지 못했어요');

@@ -142,21 +142,21 @@ app.whenReady().then(async () => {
   const upOut = await hook('UserPromptSubmit', { ...s2, prompt: '로그인 화면 붙여 줘' });
   check('세션 간 공유가 다음 프롬프트에 붙는다', shareRes.ok && upOut && upOut.hookSpecificOutput.additionalContext.includes('/auth/login'));
 
-  // 6) 자리 비움 모드: 세션 보드에서 다음 지시 보내기
-  await run(`window.codepup.updateSettings({ awayMode: true })`);
-  const replyP = hook('Stop', { ...s2, last_assistant_message: '로그인 화면을 만들었어요!' });
-  await wait(800);
+  // 6) 세션 보드: 한 줄 목록 + 마크다운 답변 + 스킨 이름
+  const doneOut = await hook('Stop', { ...s2, last_assistant_message: '## 완료\n로그인 화면을 **만들었어요**. `LoginPage.tsx` 추가.\n\n- 폼 검증\n- 에러 메시지' });
+  check('작업 완료 훅은 기다리지 않는다', doneOut === null || doneOut === '' || doneOut === undefined, JSON.stringify(doneOut));
+  await wait(600);
+  const doneBubble = await run(`document.querySelector('#bubble').innerText`);
+  check('말풍선에는 마크다운 기호 없이 첫 문장만', doneBubble.includes('로그인 화면을 만들었어요.') && !doneBubble.includes('**') && !doneBubble.includes('##'), doneBubble);
   await run(`window.codepup.menuAction('open-panel', { sessionId: 'sess-web' })`);
   await wait(2500);
   const panel = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/panel/'));
   check('세션 보드가 열린다', !!panel);
-  const cards = await panel.webContents.executeJavaScript(`[...document.querySelectorAll('.card')].map(c => c.innerText.split('\\n')[0] + ' ' + c.querySelector('.name').textContent)`);
-  check('보드에 세션 3개 (이미 열린 세션 포함)', cards.length === 3, cards.join(' | '));
-  await shot(panel, '04-panel-reply.png');
-  await panel.webContents.executeJavaScript(`(() => { const ta = document.querySelector('.card[data-id="sess-web"] textarea'); ta.value = '회원가입 화면도 같은 스타일로 만들어 줘'; ta.dispatchEvent(new Event('input')); document.querySelector('.card[data-id="sess-web"] button.primary').click(); })()`);
-  const replyOut = await Promise.race([replyP, wait(5000).then(() => 'timeout')]);
-  check('보드에서 보낸 지시가 세션으로 이어진다', replyOut && replyOut.hookSpecificOutput && replyOut.hookSpecificOutput.additionalContext.includes('회원가입 화면'), JSON.stringify(replyOut).slice(0, 120));
-  await run(`window.codepup.updateSettings({ awayMode: false })`);
+  const rows = await panel.webContents.executeJavaScript(`[...document.querySelectorAll('.line .name')].map((n) => n.textContent)`);
+  check('보드에 세션 3개가 한 줄씩 (이미 열린 세션 포함)', rows.length === 3, rows.join(' | '));
+  const mdHtml = await panel.webContents.executeJavaScript(`(document.querySelector('.line.open .md') || {}).innerHTML || ''`);
+  check('펼친 세션의 답변이 마크다운으로 보인다', mdHtml.includes('<b>만들었어요</b>') && mdHtml.includes('<li>폼 검증</li>'), mdHtml.slice(0, 120));
+  await shot(panel, '04-panel.png');
 
   // 7) 세션 종료 → 복구 후보 (rcup)
   await hook('SessionEnd', { ...s1, reason: 'other' });
@@ -195,8 +195,12 @@ app.whenReady().then(async () => {
   check('착지 후 어지러워한다', ['dizzy', 'wander', 'idle'].includes(await run('window.__codepup.state')));
 
   // 9) 기본 제공 스피키 스킨으로 바꾸기
+  await run('window.__codepup.clearNotice()'); // 남아 있는 작업 알림 말풍선 닫기
   await run(`window.codepup.updateSettings({ skin: 'speaki' })`);
-  await wait(2500);
+  await wait(700);
+  const hello = await run(`document.querySelector('#bubble').innerText`);
+  check('스킨을 바꾸면 새 이름으로 인사한다', hello.includes('스피키예요') && !hello.includes('초코'), hello);
+  await wait(1800);
   const sk = await run(`window.codepup.init().then((b) => ({ id: b.skin.id, name: b.settings.name }))`);
   check('스피키 스킨으로 바꾸면 이름도 스피키', sk.id === 'speaki' && sk.name === '스피키', JSON.stringify(sk));
   await shot(pet, '06-speaki-skin.png');

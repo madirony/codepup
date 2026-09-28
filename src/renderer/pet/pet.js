@@ -786,17 +786,12 @@
       case 'done': {
         noticeAnim('alert', ['❗', '✨']);
         play('done');
-        const msg = event.message ? `\n${clipText(event.message, 70)}` : '';
-        const actions = event.awaitingReply
-          ? [
-              { label: '답장', cls: 'ok', fn: () => api.menuAction('open-panel', { sessionId: id }) },
-              { label: '터미널에서', fn: () => api.release(id) },
-            ]
-          : [
-              { label: '터미널', cls: 'ok', fn: () => api.focusSession(id) },
-              { label: '보드', fn: () => api.menuAction('open-panel', { sessionId: id }) },
-            ];
-        say(`✅ ${session.name} 작업 끝!${msg}`, event.awaitingReply ? (settings.replyWaitMin || 30) * 60000 : 15000, true, {
+        const msg = event.message ? `\n${window.CodePupMd.summary(event.message, 70)}` : '';
+        const actions = [
+          { label: '터미널', cls: 'ok', fn: () => api.focusSession(id) },
+          { label: '보드', fn: () => api.menuAction('open-panel', { sessionId: id }) },
+        ];
+        say(`✅ ${session.name} 작업 끝!${msg}`, 15000, true, {
           sessionId: id,
           kind: 'done',
           actions,
@@ -831,6 +826,7 @@
 
   api.onSkins(async (p) => {
     skin = p.active;
+    if (p.name) settings = { ...settings, name: p.name }; // 설정 변경 알림보다 먼저 올 수 있어서 새 이름을 함께 받음
     await loadTextures();
     setTex(texKey);
     for (const f of foods) f.sprite.texture = tex('food');
@@ -1336,5 +1332,5 @@
   });
 
   // 디버그/테스트용 훅
-  window.__codepup = { P, get state() { return P.state; }, spawnFood, onPetClick };
+  window.__codepup = { P, get state() { return P.state; }, spawnFood, onPetClick, clearNotice: () => clearNotice() };
 })();

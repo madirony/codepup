@@ -8,7 +8,7 @@ const HISTORY_MAX = 40;
 // 사용자가 직접 끝낸 세션 (/exit · Ctrl+D · /clear · /resume 로 다른 세션 전환 · 로그아웃)
 // → "닫힌 세션 다시 열기"에 넣지 않아요. 터미널이 꺼지거나 맥이 재시동돼서 사라진 세션만 복구 대상.
 const USER_ENDED = new Set(['prompt_input_exit', 'clear', 'resume', 'logout']);
-const SUMMARY_MAX = 1200;
+const SUMMARY_MAX = 4000;
 
 function projectName(cwd) {
   if (!cwd) return '알 수 없는 폴더';
@@ -18,6 +18,13 @@ function projectName(cwd) {
 function clip(text, n) {
   if (!text) return '';
   const s = String(text).replace(/\s+/g, ' ').trim();
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+// 줄바꿈은 살려서 자르기 (마크다운 답변용)
+function clipKeepLines(text, n) {
+  if (!text) return '';
+  const s = String(text).replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
@@ -48,7 +55,7 @@ function describeTool(toolName, input = {}) {
 class SessionHub extends EventEmitter {
   /**
    * @param {object} opts
-   * @param {() => object} opts.getSettings  { awayMode, permissionWaitSec, replyWaitMin }
+   * @param {() => object} opts.getSettings  { permissionWaitSec }
    * @param {object[]} [opts.history]        복구용 세션 기록
    * @param {() => number} [opts.now]
    */
@@ -89,14 +96,12 @@ class SessionHub extends EventEmitter {
 
   counts() {
     let permission = 0;
-    let reply = 0;
     let working = 0;
     for (const s of this.sessions.values()) {
       if (s.pending && s.pending.kind === 'permission') permission++;
-      else if (s.pending && s.pending.kind === 'reply') reply++;
       if (s.status === 'working') working++;
     }
-    return { total: this.sessions.size, permission, reply, working };
+    return { total: this.sessions.size, permission, working };
   }
 
   // ---------- 훅 처리 ----------
@@ -257,7 +262,7 @@ class SessionHub extends EventEmitter {
     const d = describeTool(payload.tool_name, payload.tool_input);
     s.status = 'permission';
     s.activity = clip(`${d.title} 허락 대기`, 80);
-    const waitSec = cfg.awayMode ? (cfg.replyWaitMin || 30) * 60 : cfg.permissionWaitSec || 60;
+    const waitSec = cfg.permissionWaitSec || 60;
     const suggestion = Array.isArray(payload.permission_suggestions) ? payload.permission_suggestions[0] : null;
     const pending = {
       kind: 'permission',
@@ -285,32 +290,12 @@ class SessionHub extends EventEmitter {
     return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } };
   }
 
-  async onStop(s, payload, signal) {
-    const cfg = this.getSettings();
+  onStop(s, payload) {
     s.status = 'done';
-    s.lastMessage = clip(payload.last_assistant_message, SUMMARY_MAX);
+    s.lastMessage = clipKeepLines(payload.last_assistant_message, SUMMARY_MAX);
     s.activity = '작업 끝!';
-    if (!cfg.awayMode) {
-      this.changed(s, { type: 'done', message: clip(s.lastMessage, 140) });
-      return null;
-    }
-    // 자리 비움 모드: 펫에서 다음 지시를 보낼 때까지 기다림
-    const pending = { kind: 'reply' };
-    const wait = this.waitFor(s, pending, (cfg.replyWaitMin || 30) * 60 * 1000, signal);
-    this.changed(s, { type: 'done', message: clip(s.lastMessage, 140), awaitingReply: true });
-    const answer = await wait;
-    this.changed(s, { type: 'settled' });
-    if (!answer || !answer.text) return null;
-    s.status = 'working';
-    s.lastPrompt = clip(answer.text, 200);
-    s.activity = '다음 지시 전달됨';
-    this.changed(s, { type: 'working' });
-    return {
-      hookSpecificOutput: {
-        hookEventName: 'Stop',
-        additionalContext: `사용자가 데스크톱 펫(CodePup)으로 다음 지시를 보냈어요. 이 지시를 이어서 수행해 주세요:\n\n${answer.text}`,
-      },
-    };
+    this.changed(s, { type: 'done', message: s.lastMessage.slice(0, 400) });
+    return null;
   }
 
   // 대화 기록 파일로 찾은 세션 (CodePup 을 켜기 전부터 열려 있던 세션 등)
@@ -353,27 +338,13 @@ class SessionHub extends EventEmitter {
     return this.settle(s, { decision, message });
   }
 
-  reply(sessionId, text) {
-    const s = this.sessions.get(sessionId);
-    const t = String(text || '').trim();
-    if (!s || !t || !s.pending || s.pending.kind !== 'reply') return false;
-    return this.settle(s, { text: t.slice(0, 4000) });
-  }
-
-  // 자리 비움 대기를 풀고 터미널에서 직접 이어서 하기
-  release(sessionId) {
-    const s = this.sessions.get(sessionId);
-    if (!s || !s.pending) return false;
-    return this.settle(s, null);
-  }
-
   shareText(items) {
     return items
       .map((it) => `다른 Claude Code 세션(${it.fromName})의 최근 결과를 공유받았어요. 참고해 주세요.\n---\n${it.text}\n---`)
       .join('\n\n');
   }
 
-  // from 세션의 마지막 결과를 to 세션의 다음 프롬프트(또는 대기 중인 답장)에 붙입니다.
+  // from 세션의 마지막 결과를 to 세션의 다음 프롬프트에 붙입니다.
   share(fromId, toId) {
     const from = this.sessions.get(fromId) || this.history.find((h) => h.id === fromId);
     const to = this.sessions.get(toId);
@@ -381,10 +352,6 @@ class SessionHub extends EventEmitter {
     const text = (this.sessions.get(fromId) || {}).lastMessage || '';
     if (!text) return { ok: false, error: '공유할 결과가 아직 없어요' };
     const item = { fromName: from.name, text };
-    if (to.pending && to.pending.kind === 'reply') {
-      this.settle(to, { text: this.shareText([item]) });
-      return { ok: true, delivered: 'now' };
-    }
     const q = this.shares.get(toId) || [];
     q.push(item);
     this.shares.set(toId, q);

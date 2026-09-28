@@ -84,10 +84,8 @@
       </div>
       <div class="card">
         <h3>알림 · 응답</h3>
-        <label class="row check"><input id="s-awayMode" type="checkbox"> 🏠 자리 비움 모드 — 작업이 끝나면 펫에서 다음 지시를 기다려요</label>
         <p class="muted">켜 두면 세션이 끝났을 때 터미널 대신 세션 보드에서 바로 다음 지시를 보낼 수 있어요. 기다리는 동안 그 터미널은 입력을 받지 않으니, 자리로 돌아오면 끄거나 [터미널에서 할게요]를 눌러 주세요.</p>
         <label class="row">허락 요청 대기 <input id="s-permissionWaitSec" type="number" min="10" max="600"> 초 (지나면 터미널 창에서 물어봐요)</label>
-        <label class="row">자리 비움 대기 <input id="s-replyWaitMin" type="number" min="1" max="58"> 분</label>
       </div>
       <div class="card">
         <h3>🔁 닫힌 세션 다시 열기</h3>
@@ -147,7 +145,8 @@
     <section id="tab-menubar" class="tab">
       <div class="card">
         <p class="muted">RunCat처럼 메뉴 막대 아이콘의 펫이 CPU 사용률에 맞춰 달려요. 옆에 표시할 항목을 고르세요.</p>
-        <label class="row check"><input data-tray="sessions" type="checkbox"> Claude 세션 알림 개수</label>
+        <label class="row check"><input data-tray="sessions" type="checkbox"> 허락 기다리는 세션 수 (🔔)</label>
+        <label class="row check"><input data-tray="awake" type="checkbox"> 잠자기 방지 중 (☕)</label>
         <label class="row check"><input data-tray="cpu" type="checkbox"> CPU</label>
         <label class="row check"><input data-tray="mem" type="checkbox"> 메모리</label>
         <label class="row check"><input data-tray="disk" type="checkbox"> 저장공간</label>

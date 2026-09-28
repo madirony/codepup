@@ -87,7 +87,7 @@ function broadcastSettings() {
 }
 
 function broadcastSkins() {
-  sendToAll('skins:changed', { skins: skins.list(), active: skins.get(store.settings.skin) });
+  sendToAll('skins:changed', { skins: skins.list(), active: skins.get(store.settings.skin), name: store.settings.name });
 }
 
 function handleEvents(events) {
@@ -285,7 +285,6 @@ function sanitizePatch(patch) {
   if (Number.isFinite(s.sprintThreshold)) out.sprintThreshold = Math.round(Math.min(100, Math.max(20, s.sprintThreshold)));
   if (Number.isFinite(s.idleSleepMinutes)) out.idleSleepMinutes = Math.round(Math.min(120, Math.max(1, s.idleSleepMinutes)));
   if (Number.isFinite(s.permissionWaitSec)) out.permissionWaitSec = Math.round(Math.min(600, Math.max(10, s.permissionWaitSec)));
-  if (Number.isFinite(s.replyWaitMin)) out.replyWaitMin = Math.round(Math.min(58, Math.max(1, s.replyWaitMin)));
   if (['auto', 'Terminal', 'iTerm'].includes(s.restoreTerminal)) out.restoreTerminal = s.restoreTerminal;
   if (typeof s.restoreExtraArgs === 'string') out.restoreExtraArgs = s.restoreExtraArgs.slice(0, 120);
   if (s.keepAwakeMode === 'open' || s.keepAwakeMode === 'working') out.keepAwakeMode = s.keepAwakeMode;
@@ -300,7 +299,6 @@ function sanitizePatch(patch) {
     'showOnFullscreen',
     'launchAtLogin',
     'hidden',
-    'awayMode',
     'restoreRemoteControl',
     'restoreSkipPermissions',
     'restoreTabs',
@@ -546,10 +544,6 @@ function handleMenuAction(name, payload = {}) {
     case 'sound-toggle':
       updateSettings({ soundEnabled: payload.value });
       break;
-    case 'away-toggle':
-      updateSettings({ awayMode: payload.value });
-      sendCommand('say', { text: payload.value ? '자리 비움 모드! 제가 대신 받아 둘게요' : '다녀오셨어요? 자리 비움 끝!', tex: 'happy' });
-      break;
     case 'open-settings':
       openSettings(payload.tab);
       break;
@@ -598,7 +592,6 @@ function showPetContextMenu() {
     { label: `${store.settings.name}  ·  Lv.${pet.level}`, enabled: false },
     { type: 'separator' },
     { label: `🗂  세션 보드${c.total ? ` (${c.total})` : ''}`, click: act('open-panel') },
-    { label: '🏠  자리 비움 모드', type: 'checkbox', checked: store.settings.awayMode, click: (i) => handleMenuAction('away-toggle', { value: i.checked }) },
     { type: 'separator' },
     { label: '🍖  밥 주기', click: act('feed') },
     { label: '🤚  쓰다듬기', click: act('pet') },
@@ -680,8 +673,6 @@ function registerIpc() {
   // 세션
   ipcMain.handle('sessions:get', () => ({ list: hub.list(), counts: hub.counts(), restorable: hub.restorable() }));
   ipcMain.handle('sessions:decide', (_e, id, decision) => hub.decide(id, decision));
-  ipcMain.handle('sessions:reply', (_e, id, text) => hub.reply(id, text));
-  ipcMain.handle('sessions:release', (_e, id) => hub.release(id));
   ipcMain.handle('sessions:share', (_e, from, to) => hub.share(from, to));
   ipcMain.handle('sessions:focus', (_e, id) => {
     const s = hub.list().find((x) => x.id === id);
@@ -797,6 +788,12 @@ app.whenReady().then(async () => {
   store = new Store(app.getPath('userData'));
   skins = new Skins({ bundledDir: path.join(APP_ROOT, 'assets', 'skins'), userDir: path.join(app.getPath('userData'), 'skins') });
   if (!skins.list().some((k) => k.id === store.settings.skin)) store.settings.skin = 'chihuahua';
+  if (!store.settings.compactTray) {
+    // 2.7: 메뉴 막대를 아이콘 위주로 (CPU 는 아이콘 달리기 속도로). 한 번만 바꾸고 이후엔 사용자 선택을 따름
+    store.settings.compactTray = true;
+    store.settings.tray = { ...store.settings.tray, cpu: false };
+    store.saveSoon();
+  }
   pet = Pet.normalize(store.pet);
   Pet.catchUp(pet);
   lastTickAt = Date.now();
