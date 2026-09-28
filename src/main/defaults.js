@@ -53,7 +53,7 @@ const DEFAULT_SETTINGS = {
   idleSleep: true, // 컴퓨터를 안 쓰면 낮잠
   idleSleepMinutes: 10,
   showOnFullscreen: true, // 전체 화면 앱 위에서도 알림을 놓치지 않게
-  launchAtLogin: false,
+  launchAtLogin: true, // 로그인하면 자동으로 켜기
   hidden: false,
   tray: { cpu: true, mem: true, disk: false, battery: false, animate: true, sessions: true, awake: false },
   keepAwake: true, // ☕ Claude 가 일하는 동안 맥이 잠들지 않게

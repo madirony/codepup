@@ -1016,6 +1016,19 @@ app.whenReady().then(async () => {
     store.settings.ambientSounds = false;
     store.saveSoon();
   }
+  if (!store.settings.loginOn) {
+    // 2.9.9: 로그인할 때 자동 실행을 기본으로 (한 번만, 이후엔 사용자 선택)
+    store.settings.loginOn = true;
+    store.settings.launchAtLogin = true;
+    store.saveSoon();
+  }
+  if (app.isPackaged && process.platform === 'darwin') {
+    try {
+      if (app.getLoginItemSettings().openAtLogin !== !!store.settings.launchAtLogin) app.setLoginItemSettings({ openAtLogin: !!store.settings.launchAtLogin });
+    } catch (err) {
+      console.error('[login item]', err);
+    }
+  }
   if (!store.settings.fullscreenOn) {
     // 2.9.4: 전체 화면 앱(터미널 · IDE) 위에서도 펫이 보이게 기본값을 켬 (한 번만, 이후엔 사용자 선택)
     store.settings.fullscreenOn = true;
