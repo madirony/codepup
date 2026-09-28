@@ -204,6 +204,13 @@ class SessionHub extends EventEmitter {
       }
 
       case 'PermissionRequest':
+        // 선택지 질문(AskUserQuestion)은 허락/거절로 답할 수 없어요 → 터미널에서 고르도록 알리기만
+        if (payload.tool_name === 'AskUserQuestion') {
+          s.status = 'waiting';
+          s.activity = '터미널에서 선택지를 골라 주세요';
+          this.changed(s, { type: 'question' });
+          return null;
+        }
         return this.askPermission(s, payload, meta.signal);
 
       case 'Stop':

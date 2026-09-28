@@ -296,6 +296,16 @@ test('정리: 일하던 중 · 허락 대기 중에 터미널이 사라져도 �
   assert.equal(await ask, null); // 기다리던 훅도 풀림
 });
 
+test('선택지 질문(AskUserQuestion)은 가로채지 않고 터미널로 안내', async () => {
+  const hub = hubWith();
+  const events = [];
+  hub.on('changed', (e) => events.push(e.event.type));
+  const out = await hub.handle('PermissionRequest', { session_id: 'q', cwd: '/w/q', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '고르세요', options: [] }] } });
+  assert.equal(out, null);
+  assert.ok(events.includes('question'));
+  assert.equal(hub.list()[0].pending, null);
+});
+
 test('다시 열기 명령은 Claude 의 하위 세션 표시를 지우고 실행한다', () => {
   const { resumeCommand, cleanEnv } = require('../src/main/terminals');
   const cmd = resumeCommand({ id: 'abc', cwd: '/w/app' });

@@ -404,9 +404,10 @@
     petted();
   }
 
-  function startSing() {
+  // asked = 메뉴에서 '노래해'를 누른 경우 → 돌아다니는 소리를 꺼 둬도 부름
+  function startSing(asked = false) {
     setState('sing', { dur: 4, tex: 'sing' });
-    const a = play('sing', { ambient: true });
+    const a = play('sing', { ambient: !asked });
     if (a) {
       a.addEventListener('loadedmetadata', () => {
         if (P.state === 'sing' && Number.isFinite(a.duration)) P.dur = Math.min(8, a.duration + 0.3);
@@ -708,7 +709,7 @@
         if (!PHYSICS.has(P.state)) petted();
         break;
       case 'sing':
-        if (!PHYSICS.has(P.state) && P.state !== 'sleep') startSing();
+        if (!PHYSICS.has(P.state) && P.state !== 'sleep') startSing(true);
         break;
       case 'say':
         say(cmd.text, 4500, true, { important: true });
@@ -810,6 +811,15 @@
         });
         break;
       }
+      case 'question':
+        noticeAnim('alert', ['❓']);
+        play('permission');
+        say(`❓ ${session.name}: 고를 게 있어요! 터미널에서 골라 주세요`, 60000, true, {
+          sessionId: id,
+          kind: 'question',
+          actions: [{ label: '터미널로', cls: 'ok', fn: () => api.focusSession(id) }],
+        });
+        break;
       case 'idle':
         if (!bubbleNotice) {
           say(`⏳ ${session.name}: 다음 지시를 기다려요`, 12000, true, {
