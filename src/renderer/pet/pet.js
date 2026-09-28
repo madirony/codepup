@@ -816,9 +816,6 @@
       case 'discovered':
         if (!bubbleNotice) say(`👀 ${session.name} 세션을 찾았어요!`, 1800);
         break;
-      case 'shared':
-        say(`📎 ${event.fromName} 결과를 ${session.name}에 전해 줄게요`, 2600, true);
-        break;
       default:
         break;
     }

@@ -65,7 +65,6 @@ class SessionHub extends EventEmitter {
     this.now = now;
     this.sessions = new Map();
     this.history = Array.isArray(history) ? history.slice(0, HISTORY_MAX) : [];
-    this.shares = new Map(); // targetId -> [{ fromName, text }]
     this.seq = 0;
   }
 
@@ -90,7 +89,6 @@ class SessionHub extends EventEmitter {
       term: s.term,
       tty: s.tty,
       pending: s.pending ? { ...s.pending, resolve: undefined, timer: undefined } : null,
-      sharedQueued: (this.shares.get(s.id) || []).length,
     };
   }
 
@@ -182,16 +180,6 @@ class SessionHub extends EventEmitter {
         s.lastPrompt = clip(payload.prompt, 200);
         s.activity = '생각 중…';
         this.changed(s, { type: 'working' });
-        const queued = this.shares.get(s.id);
-        if (queued && queued.length) {
-          this.shares.delete(s.id);
-          return {
-            hookSpecificOutput: {
-              hookEventName: 'UserPromptSubmit',
-              additionalContext: this.shareText(queued),
-            },
-          };
-        }
         return null;
       }
 
@@ -339,27 +327,6 @@ class SessionHub extends EventEmitter {
     const s = this.sessions.get(sessionId);
     if (!s || !s.pending || s.pending.kind !== 'permission') return false;
     return this.settle(s, { decision, message });
-  }
-
-  shareText(items) {
-    return items
-      .map((it) => `다른 Claude Code 세션(${it.fromName})의 최근 결과를 공유받았어요. 참고해 주세요.\n---\n${it.text}\n---`)
-      .join('\n\n');
-  }
-
-  // from 세션의 마지막 결과를 to 세션의 다음 프롬프트에 붙입니다.
-  share(fromId, toId) {
-    const from = this.sessions.get(fromId) || this.history.find((h) => h.id === fromId);
-    const to = this.sessions.get(toId);
-    if (!from || !to || fromId === toId) return { ok: false, error: '세션을 찾을 수 없어요' };
-    const text = (this.sessions.get(fromId) || {}).lastMessage || '';
-    if (!text) return { ok: false, error: '공유할 결과가 아직 없어요' };
-    const item = { fromName: from.name, text };
-    const q = this.shares.get(toId) || [];
-    q.push(item);
-    this.shares.set(toId, q);
-    this.changed(to, { type: 'shared', fromName: from.name });
-    return { ok: true, delivered: 'next-prompt' };
   }
 
   // 복구 후보: 지금 열려 있지 않은 최근 세션 중, 사용자가 직접 끝낸 건 빼고

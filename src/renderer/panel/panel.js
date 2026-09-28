@@ -102,7 +102,7 @@
     return c;
   }
 
-  // 나머지: 한 줄 (누르면 마지막 답변 · 공유 · 터미널)
+  // 나머지: 한 줄 (누르면 마지막 답변 · 터미널)
   function line(s) {
     const [cls, label] = statusOf(s);
     const open = expanded.has(s.id);
@@ -128,20 +128,6 @@
     if (s.lastMessage) body.append(mdBox(s.lastMessage));
     const foot = el('div', 'btns');
     foot.append(button('터미널로 이동', 'ghost', () => focus(s.id)));
-    const others = sessions.filter((o) => o.id !== s.id);
-    if (s.lastMessage && others.length) {
-      const sel = el('select');
-      sel.append(new Option('결과 공유 → 세션 선택', ''));
-      for (const o of others) sel.append(new Option(`→ ${o.name}`, o.id));
-      sel.addEventListener('change', async () => {
-        if (!sel.value) return;
-        const r = await api.share(s.id, sel.value);
-        toast(r.ok ? '다음 대화에 붙여서 전달할게요' : r.error);
-        sel.value = '';
-      });
-      foot.append(sel);
-    }
-    if (s.sharedQueued) foot.append(el('span', 'countdown', `📎 공유 ${s.sharedQueued}건 대기`));
     body.append(foot);
     item.append(body);
     return item;

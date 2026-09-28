@@ -137,11 +137,6 @@ app.whenReady().then(async () => {
   check('작업 완료가 펫 성장으로 이어진다', tasksDone >= 1, `tasksDone=${tasksDone}`);
   await shot(pet, '03-done.png');
 
-  // 5) 세션 간 공유: api 결과 → web 세션 다음 프롬프트에 첨부
-  const shareRes = await run(`window.codepup.share('sess-api', 'sess-web')`);
-  const upOut = await hook('UserPromptSubmit', { ...s2, prompt: '로그인 화면 붙여 줘' });
-  check('세션 간 공유가 다음 프롬프트에 붙는다', shareRes.ok && upOut && upOut.hookSpecificOutput.additionalContext.includes('/auth/login'));
-
   // 6) 세션 보드: 한 줄 목록 + 마크다운 답변 + 스킨 이름
   const doneOut = await hook('Stop', { ...s2, last_assistant_message: '## 완료\n로그인 화면을 **만들었어요**. `LoginPage.tsx` 추가.\n\n- 폼 검증\n- 에러 메시지' });
   check('작업 완료 훅은 기다리지 않는다', doneOut === null || doneOut === '' || doneOut === undefined, JSON.stringify(doneOut));
@@ -235,6 +230,8 @@ app.whenReady().then(async () => {
   await shot(sw, '07-settings-claude.png');
   await sw.webContents.executeJavaScript(`document.querySelector('[data-tab=custom]').click()`);
   await wait(800);
+  const tops = await sw.webContents.executeJavaScript(`[...document.querySelectorAll('#skin-list .slot .btns')].map((b) => Math.round(b.getBoundingClientRect().top))`);
+  check('스킨 카드의 버튼이 모두 같은 높이', tops.length >= 2 && new Set(tops).size === 1, JSON.stringify(tops));
   await shot(sw, '08-settings-custom.png');
 
   fs.writeFileSync(path.join(OUT, 'errors.txt'), errors.join('\n'));

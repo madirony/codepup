@@ -81,18 +81,6 @@ test('마크다운: 보드에는 HTML 로, 말풍선에는 기호 없는 첫 문
   assert.equal(md.summary('# 제목만'), '제목만');
 });
 
-test('세션 간 공유: 다음 프롬프트에 다른 세션의 결과가 붙는다', async () => {
-  const hub = hubWith();
-  await hub.handle('Stop', { ...base, last_assistant_message: 'API 스키마는 /v2/users 로 바꿨어요' });
-  await hub.handle('SessionStart', { session_id: 's2', cwd: '/Users/me/work/web' });
-  assert.equal(hub.share('s1', 's2').delivered, 'next-prompt');
-  const out = await hub.handle('UserPromptSubmit', { session_id: 's2', cwd: '/Users/me/work/web', prompt: '프론트 맞춰 줘' });
-  assert.match(out.hookSpecificOutput.additionalContext, /my-app/);
-  assert.match(out.hookSpecificOutput.additionalContext, /\/v2\/users/);
-  // 한 번 전달하면 비워짐
-  assert.equal(await hub.handle('UserPromptSubmit', { session_id: 's2', cwd: '/Users/me/work/web', prompt: '다음' }), null);
-});
-
 test('종료된 세션은 복구 후보가 된다', async () => {
   const hub = hubWith();
   await hub.handle('SessionStart', base);

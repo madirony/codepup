@@ -40,7 +40,6 @@ contextBridge.exposeInMainWorld('codepup', {
   // Claude Code 세션
   sessions: () => ipcRenderer.invoke('sessions:get'),
   decide: (id, decision) => ipcRenderer.invoke('sessions:decide', id, decision),
-  share: (from, to) => ipcRenderer.invoke('sessions:share', from, to),
   focusSession: (id) => ipcRenderer.invoke('sessions:focus', id),
   restoreSessions: (ids) => ipcRenderer.invoke('sessions:restore', ids),
   forgetSession: (id) => ipcRenderer.invoke('sessions:forget', id),

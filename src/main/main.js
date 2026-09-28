@@ -673,7 +673,6 @@ function registerIpc() {
   // 세션
   ipcMain.handle('sessions:get', () => ({ list: hub.list(), counts: hub.counts(), restorable: hub.restorable() }));
   ipcMain.handle('sessions:decide', (_e, id, decision) => hub.decide(id, decision));
-  ipcMain.handle('sessions:share', (_e, from, to) => hub.share(from, to));
   ipcMain.handle('sessions:focus', (_e, id) => {
     const s = hub.list().find((x) => x.id === id);
     return s ? terminals.focusSession(s) : { ok: false, error: '세션이 없어요' };
