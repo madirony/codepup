@@ -345,16 +345,18 @@ class SessionHub extends EventEmitter {
   sweep({ aliveTtys = null, graceMs = 60000, idleTimeoutMs = 3 * 60 * 60000, noTtyTimeoutMs = 20 * 60000 } = {}) {
     const t = this.now();
     for (const s of [...this.sessions.values()]) {
-      if (s.pending || s.status === 'working' || s.status === 'permission') continue;
       const lastSignal = s.updatedAt || 0;
       const quiet = t - lastSignal;
       const tty = String(s.tty || '').replace(/^\/dev\//, '');
+      // 터미널이 사라진 게 확실하면 일하던 중 · 허락 대기 중이어도 정리 (iTerm 을 통째로 닫은 경우)
+      const termGone = aliveTtys && (aliveTtys.size === 0 || (tty && !aliveTtys.has(tty)));
+      if (!termGone && (s.pending || s.status === 'working' || s.status === 'permission')) continue;
       let gone;
-      if (aliveTtys && aliveTtys.size === 0) gone = quiet > graceMs;
-      else if (aliveTtys && tty) gone = !aliveTtys.has(tty) && quiet > graceMs;
+      if (termGone) gone = quiet > graceMs;
       else if (!tty) gone = quiet > noTtyTimeoutMs;
       else gone = quiet > idleTimeoutMs;
       if (gone) {
+        if (s.pending) this.settle(s, null);
         s.status = 'ended';
         s.endReason = 'vanished';
         this.remember(s);

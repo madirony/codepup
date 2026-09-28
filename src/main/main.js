@@ -301,6 +301,7 @@ function togglePopover(bounds) {
     placePopover(bounds);
     popWin.show();
     popWin.focus();
+    if (process.platform === 'darwin') app.focus({ steal: true }); // Dock 이 없는 앱이라 포커스를 가져와야 바깥 클릭으로 닫혀요
     popWin.webContents.send('popover:shown');
     return;
   }
@@ -687,7 +688,9 @@ async function attachRunning(procs) {
     let id = terminals.sessionIdFromArgs(p.command);
     let file = '';
     if (!id) {
-      const recent = transcripts.recentSessions({ cwd }).filter((r) => !taken.has(r.id));
+      // 이 프로세스가 켜진 뒤에 바뀐 대화 기록만 (방금 연 새 세션이 같은 폴더의 옛 세션으로 붙지 않게)
+      const since = (p.startedAt || 0) - 5000;
+      const recent = transcripts.recentSessions({ cwd }).filter((r) => !taken.has(r.id) && r.mtime >= since);
       if (!recent.length) continue; // 아직 대화를 시작하지 않은 새 세션
       id = recent[0].id;
       file = recent[0].path;
@@ -988,7 +991,7 @@ async function firstRunClaude() {
     cancelId: 0,
     message: `안녕하세요! ${store.settings.name}예요 🐶`,
     detail:
-      'Claude Code 를 쓰고 계신가요? 연결하면 세션이 작업을 끝내거나 허락이 필요할 때 제가 달려가서 알려 드리고, 여기서 바로 허락하거나 다음 지시를 보낼 수 있어요.\n\n(~/.claude/settings.json 에 훅을 추가해요. 나중에 설정에서 언제든 해제할 수 있어요.)',
+      'Claude Code 를 쓰고 계신가요? 연결하면 세션이 작업을 끝내거나 허락이 필요할 때 제가 달려가서 알려 드리고, 말풍선에서 바로 허락 · 거절할 수 있어요.\n\n(~/.claude/settings.json 에 훅을 추가해요. 나중에 설정에서 언제든 해제할 수 있어요.)',
   });
   if (res.response === 1) connectClaude(false);
 }

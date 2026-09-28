@@ -254,11 +254,19 @@ class Bridge {
 
   writeClaudeSettings(settings) {
     fs.mkdirSync(path.dirname(this.claudeSettings), { recursive: true });
-    if (fs.existsSync(this.claudeSettings)) {
-      fs.copyFileSync(this.claudeSettings, this.claudeSettings + '.codepup-backup');
+    const next = JSON.stringify(settings, null, 2) + '\n';
+    let cur = null;
+    try {
+      cur = fs.readFileSync(this.claudeSettings, 'utf8');
+    } catch {
+      // 없으면 새로 만듦
     }
+    if (cur === next) return; // 바뀐 게 없으면 건드리지 않음
+    // 백업은 처음 한 번만 (CodePup 이 손대기 전 원본을 지키려고)
+    const backup = this.claudeSettings + '.codepup-backup';
+    if (cur !== null && !fs.existsSync(backup)) fs.writeFileSync(backup, cur);
     const tmp = this.claudeSettings + '.codepup-tmp';
-    fs.writeFileSync(tmp, JSON.stringify(settings, null, 2) + '\n');
+    fs.writeFileSync(tmp, next);
     fs.renameSync(tmp, this.claudeSettings);
   }
 }

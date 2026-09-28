@@ -157,9 +157,13 @@ async function openSessions(sessions, opts = {}) {
 }
 
 // 대화형 claude 명령인지 (claude -p / --print 같은 한 번짜리 실행은 제외)
-const CLAUDE_RE = /(^|[\s/])claude(\s|$)/;
+// 실행 파일 자체가 claude 일 때만 (vim claude · less claude 같은 건 아님)
 function isInteractiveClaude(command) {
-  return CLAUDE_RE.test(command) && !/(^|\s)(-p|--print)(\s|$)/.test(command);
+  const t = String(command || '').trim().split(/\s+/);
+  const base = (x) => String(x || '').split('/').pop();
+  const exe = base(t[0]);
+  const isClaude = exe === 'claude' || (/^(node|bun)$/.test(exe) && /(^|\/)(claude|cli\.m?js)$/.test(t[1] || '') && /claude/.test(t[1] || ''));
+  return isClaude && !/(^|\s)(-p|--print)(\s|$)/.test(command);
 }
 
 // 명령줄에 세션 ID 가 있으면 (--resume <id> · -r <id> · --session-id <id>)
@@ -192,19 +196,29 @@ function runningClaudes() {
 }
 
 // 원래 claude 명령의 옵션은 그대로 두고 세션만 --resume <id> 로 (예: --dangerously-skip-permissions --remote-control 이름)
+// ps 출력엔 따옴표가 없어서 띄어쓰기가 있는 값은 복원할 수 없어요 → 아는 옵션만 남기고 나머지(첫 프롬프트 등)는 버려요
+const FLAG_ONLY = new Set(['--dangerously-skip-permissions', '--rc', '--verbose', '--ide', '--chrome', '--no-chrome']);
+const FLAG_VALUE = new Set(['--permission-mode', '--model', '--fallback-model', '--add-dir', '--settings', '--agent', '--mcp-config']);
 function reopenCommand(session, command) {
   const tokens = String(command || '').trim().split(/\s+/);
-  const at = tokens.findIndex((t) => /(^|\/)claude$/.test(t));
+  const at = tokens.findIndex((t) => /(^|\/)(claude|cli\.m?js)$/.test(t));
   const args = at >= 0 ? tokens.slice(at + 1) : [];
   const kept = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--resume' || a === '-r' || a === '--session-id') {
-      if (args[i + 1] && !args[i + 1].startsWith('-')) i++;
-      continue;
-    }
-    if (/^(--resume|--session-id)=/.test(a) || a === '--continue' || a === '-c') continue;
-    kept.push(a);
+    const next = args[i + 1];
+    if (FLAG_ONLY.has(a)) kept.push(a);
+    else if (FLAG_VALUE.has(a) && next && !next.startsWith('-')) {
+      kept.push(a, next);
+      i++;
+    } else if (a === '--remote-control') {
+      // 이름은 선택: 바로 뒤가 옵션이 아닌 한 단어면 이름으로
+      kept.push(a);
+      if (next && !next.startsWith('-') && !/["']/.test(next)) {
+        kept.push(next);
+        i++;
+      }
+    } else if (/^--(permission-mode|model|settings|agent)=/.test(a)) kept.push(a);
   }
   kept.push('--resume', session.id);
   return `cd ${shQuote(session.cwd || '~')} && env -u ${CHILD_MARKERS.join(' -u ')} claude ${kept.map(shQuote).join(' ')}`;
@@ -263,6 +277,14 @@ const alive = (pid) => {
 async function reopenInPlace(session, proc) {
   if (process.platform !== 'darwin') return { ok: false, error: 'macOS 에서만 지원해요' };
   const cmd = reopenCommand(session, proc.command);
+  // 끄기 직전에 그 PID 가 아직 같은 터미널의 claude 인지 다시 확인 (PID 가 재사용됐을 수 있어요)
+  const now = await new Promise((resolve) => {
+    execFile('ps', ['-p', String(proc.pid), '-o', 'tty=,command='], { timeout: 4000, env: cleanEnv() }, (err, out) => resolve(err ? '' : String(out).trim()));
+  });
+  const m = /^(\S+)\s+(.*)$/.exec(now);
+  if (!m || m[1].replace(/^\/dev\//, '') !== proc.tty || !isInteractiveClaude(m[2])) {
+    return { ok: false, error: '그 세션이 이미 바뀌었어요. 잠시 뒤 다시 해 주세요' };
+  }
   try {
     process.kill(proc.pid, 'SIGTERM'); // claude 는 대화 기록을 저장하고 끝나요
   } catch (err) {

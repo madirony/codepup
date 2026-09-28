@@ -63,7 +63,7 @@
           <h3>Claude Code 연결</h3>
           <span id="cc-status" class="status off">⚪ 연결 안 됨</span>
         </div>
-        <p class="muted">연결하면 <code id="cc-path"></code> 에 알림용 훅을 추가해요. 기존 설정은 그대로 두고 백업을 남겨요. 이미 열려 있던 세션은 다시 시작해야 적용돼요.</p>
+        <p class="muted">연결하면 <code id="cc-path"></code> 에 알림용 훅을 추가해요. 기존 설정은 그대로 두고 처음 한 번 백업을 남겨요. 이미 열려 있던 세션은 세션 보드의 [🔔 알림 켜기]로 한 번 다시 열면 적용돼요.</p>
         <div class="actions">
           <button id="cc-connect">🔌 연결하기</button>
           <button id="cc-disconnect" class="ghost hidden">연결 해제</button>
@@ -88,8 +88,8 @@
         <p class="muted">노트북 덮개를 닫으면 macOS 는 잠자기 방지 앱이 있어도 잠들어요. 외출할 때는 메뉴 막대의 <b>🧳 덮개를 닫아도 잠들지 않기</b>를 켜 주세요 (관리자 암호를 한 번 물어봐요).</p>
       </div>
       <div class="card">
-        <h3>알림 · 응답</h3>
-        <p class="muted">켜 두면 세션이 끝났을 때 터미널 대신 세션 보드에서 바로 다음 지시를 보낼 수 있어요. 기다리는 동안 그 터미널은 입력을 받지 않으니, 자리로 돌아오면 끄거나 [터미널에서 할게요]를 눌러 주세요.</p>
+        <h3>허락 요청</h3>
+        <p class="muted">허락이 필요하면 펫 말풍선 · 메뉴 막대 팝오버 · 세션 보드에서 바로 허락하거나 거절할 수 있어요. 정한 시간 안에 답하지 않으면 원래대로 터미널에서 물어봐요.</p>
         <label class="row">허락 요청 대기 <input id="s-permissionWaitSec" type="number" min="10" max="600"> 초 (지나면 터미널 창에서 물어봐요)</label>
       </div>
       <div class="card">

@@ -251,6 +251,14 @@ test('알림 켜기: 연결 전에 연 세션을 원래 옵션 그대로 같은 
     "cd '/w/study' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude '--dangerously-skip-permissions' '--remote-control' 'study' '--resume' '1b2c3d4e-0000-4000-8000-123456789abc'"
   );
   assert.match(t.reopenCommand({ id: 'x', cwd: '/w' }, procs[1].command), /claude '--resume' 'x'$/); // -c 는 빼고 이 세션으로
+  // 따옴표가 사라진 첫 프롬프트 같은 건 버리고 아는 옵션만 (다시 열 때 엉뚱한 지시가 들어가지 않게)
+  assert.equal(
+    t.reopenCommand({ id: 'y', cwd: '/w' }, 'claude --model opus --remote-control laptop fix the login bug --rc'),
+    "cd '/w' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude '--model' 'opus' '--remote-control' 'laptop' '--rc' '--resume' 'y'"
+  );
+  assert.ok(!t.isInteractiveClaude('vim claude'));
+  assert.ok(!t.isInteractiveClaude('less /tmp/claude'));
+  assert.ok(t.isInteractiveClaude('node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js'));
   const hub = hubWith();
   hub.attach({ session_id: 'old', cwd: '/w/a', tty: 'ttys003', pid: 501, command: procs[0].command, needsReopen: true });
   hub.attach({ session_id: 'new', cwd: '/w/b', tty: 'ttys004', pid: 503, command: procs[1].command });
@@ -273,6 +281,19 @@ test('세션 보드 단축키: 표시 · 키 입력으로 만들기', () => {
   assert.equal(k.fromEvent({ code: 'MetaLeft', metaKey: true }), ''); // 수정키만 누른 중
   const { DEFAULT_SETTINGS } = require('../src/main/defaults');
   assert.equal(DEFAULT_SETTINGS.panelShortcut, 'Alt+CommandOrControl+J'); // 노션 ⌘⇧J 와 안 겹치게
+});
+
+test('정리: 일하던 중 · 허락 대기 중에 터미널이 사라져도 정리하고 대기를 푼다', async () => {
+  let t = 1_000_000;
+  const hub = new SessionHub({ getSettings: () => ({ permissionWaitSec: 600 }), now: () => t });
+  await hub.handle('UserPromptSubmit', { session_id: 'w', cwd: '/w/w', prompt: 'go' }, { tty: 'ttys001' });
+  const ask = hub.handle('PermissionRequest', { session_id: 'p', cwd: '/w/p', tool_name: 'Bash', tool_input: { command: 'ls' } }, { tty: 'ttys002' });
+  t += 30 * 60000;
+  hub.sweep({ aliveTtys: new Set(['ttys001', 'ttys002']) });
+  assert.equal(hub.list().length, 2); // 터미널이 살아 있으면 그대로
+  hub.sweep({ aliveTtys: new Set() }); // iTerm 을 통째로 닫음
+  assert.equal(hub.list().length, 0);
+  assert.equal(await ask, null); // 기다리던 훅도 풀림
 });
 
 test('다시 열기 명령은 Claude 의 하위 세션 표시를 지우고 실행한다', () => {
