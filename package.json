@@ -1,7 +1,7 @@
 {
   "name": "codepup",
   "productName": "CodePup",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "description": "여러 Claude Code 세션을 지켜보다가 끝나거나 허락이 필요하면 달려와 알려 주는 데스크톱 펫 (메뉴 막대 시스템 모니터 포함)",
   "main": "src/main/main.js",
   "author": "madirony",

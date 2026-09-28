@@ -319,6 +319,20 @@ test('닫힌 세션 다시 열기: 권한 확인 건너뛰기 옵션', () => {
   assert.equal(resumeCommand(h, { remoteControl: false }), "cd '/Users/me/work/my-app' && env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT claude --resume 's1'");
 });
 
+test('닫힌 세션 다시 열기: 원래 권한 모드 그대로', async () => {
+  const hub = hubWith();
+  await hub.handle('SessionStart', { session_id: 'yolo', cwd: '/w/a', permission_mode: 'bypassPermissions' });
+  await hub.handle('SessionStart', { session_id: 'auto1', cwd: '/w/b', permission_mode: 'auto' });
+  await hub.handle('SessionStart', { session_id: 'plain', cwd: '/w/c', permission_mode: 'default' });
+  await hub.handle('SessionEnd', { session_id: 'yolo', cwd: '/w/a', reason: 'other' }); // 모드가 없는 이벤트도 기억은 유지
+  for (const id of ['auto1', 'plain']) await hub.handle('SessionEnd', { session_id: id, cwd: `/w/${id === 'auto1' ? 'b' : 'c'}`, reason: 'other' });
+  const cmd = (id, o) => resumeCommand(hub.restorable().find((h) => h.id === id), o);
+  assert.match(cmd('yolo'), /claude --resume 'yolo' --rc --dangerously-skip-permissions$/);
+  assert.match(cmd('auto1'), /--rc --permission-mode auto$/);
+  assert.match(cmd('plain'), /--resume 'plain' --rc$/);
+  assert.match(cmd('plain', { skipPermissions: true }), /--dangerously-skip-permissions$/);
+});
+
 test('닫힌 세션 다시 열기: /exit 로 직접 끝낸 세션은 복구하지 않는다', async () => {
   let t = 1_000_000;
   const hub = new SessionHub({ getSettings: () => ({}), now: () => t });

@@ -132,6 +132,8 @@ class SessionHub extends EventEmitter {
       s.name = projectName(payload.cwd);
     }
     if (payload.transcript_path) s.transcriptPath = payload.transcript_path;
+    // 이 세션이 돌던 권한 모드 (default · acceptEdits · auto · bypassPermissions …) → 다시 열 때 그대로
+    if (typeof payload.permission_mode === 'string' && payload.permission_mode) s.permissionMode = payload.permission_mode;
     if (meta.term) s.term = meta.term;
     if (meta.tty) s.tty = meta.tty;
     if (touch) s.updatedAt = this.now();
@@ -145,6 +147,7 @@ class SessionHub extends EventEmitter {
       cwd: s.cwd,
       name: s.name,
       term: s.term,
+      permissionMode: s.permissionMode || '',
       lastSeen: this.now(),
       ended: s.status === 'ended',
       endReason: s.endReason || '', // 'exit' = 사용자가 끝냄 · 'closed' = 터미널이 닫힘 · 'vanished' = 신호가 끊김

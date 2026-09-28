@@ -37,11 +37,21 @@ function osascript(lines) {
   });
 }
 
+// 원래 돌던 권한 모드 → claude 실행 옵션 (plan 은 이어 가지 않고 기본으로)
+const MODE_FLAGS = {
+  bypassPermissions: ['--dangerously-skip-permissions'],
+  acceptEdits: ['--permission-mode', 'acceptEdits'],
+  auto: ['--permission-mode', 'auto'],
+  dontAsk: ['--permission-mode', 'dontAsk'],
+};
+
 // 세션을 다시 여는 셸 명령
+// skipPermissions: 항상 --dangerously-skip-permissions · 아니면 세션이 원래 쓰던 모드 그대로
 function resumeCommand(session, { remoteControl = true, skipPermissions = false, extraArgs = '' } = {}) {
   const parts = ['claude', '--resume', shQuote(session.id)];
   if (remoteControl) parts.push('--rc');
   if (skipPermissions) parts.push('--dangerously-skip-permissions');
+  else if (MODE_FLAGS[session.permissionMode]) parts.push(...MODE_FLAGS[session.permissionMode]);
   if (extraArgs && /^[\w\s=.:/@,+-]*$/.test(extraArgs)) parts.push(extraArgs.trim());
   return `cd ${shQuote(session.cwd || '~')} && env -u ${CHILD_MARKERS.join(' -u ')} ${parts.join(' ')}`;
 }
