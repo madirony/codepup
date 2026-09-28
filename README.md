@@ -1,95 +1,100 @@
-# 🐶 CodePup — Claude Code 세션을 지켜보는 데스크톱 펫 (macOS)
+# 🐶 CodePup — Claude 가 나를 기다리면 달려와서 알려 주는 강아지
 
-> 세션 여러 개 돌려 놓고 딴 창 보다가, **끝난 줄도 모르고 · 허락(y/n) 창에 멈춘 줄도 모르고** 몇 분씩 날린 적 있나요?
-> 이 작은 치와와가 모든 Claude Code 세션을 대신 지켜보다가, 일이 생기면 달려와서 알려 주고 **그 자리에서 허락 · 거절**까지 받아 줘요.
+> Claude Code 에게 일 맡겨 놓고 딴 창 보다가, **허락(y/n) 창에서 멈춘 줄도 모르고 10분** 날린 적 있나요?
+> CodePup 은 화면 구석을 걸어 다니다가, 세션이 나를 부르면 달려와서 **그 자리에서 허락 · 거절**하게 해 줘요.
 
-## 무엇을 해결하나요?
+<p>
+  <img src="docs/images/permission.png" width="330" alt="허락 요청 말풍선">
+  <img src="docs/images/done.png" width="245" alt="작업 끝 알림">
+</p>
 
-| 불편 | 이 앱에서는 |
-| --- | --- |
-| 세션이 끝났는지 보려고 터미널 탭을 계속 돌아다닌다 | 끝나면 펫이 "✅ api-server 작업 끝!" 말풍선으로 알려 줘요. 결과 요약도 같이 |
-| 권한 요청(y/n)에서 멈춘 걸 모르고 방치한다 | 요청 즉시 말풍선에 **[허락] [거절]** 버튼. 누르면 세션이 바로 진행돼요. 기다리는 세션 수는 빨간 배지로 |
-| 세션이 여러 개라 뭐가 어떤 상태인지 모르겠다 | **메뉴 막대 팝오버**: 아이콘을 누르면 허락 대기 카드 · 세션 목록 · CPU · 메모리 · 저장공간 · 배터리를 한 화면에 |
-| 세션이 10개가 넘으면 뭐가 어떤지 모르겠다 | **세션 보드(⌥⌘J)**: 허락 기다리는 세션만 크게, 나머지는 한 줄씩. 눌러서 펼치면 마지막 답변이 마크다운으로 깔끔하게 보여요 |
-| 터미널을 닫았다가 원격 제어(--rc) 세션을 다시 열려면 하나하나 `claude --resume` | **닫힌 세션 골라서 다시 열기**: 쓰던 터미널 창에 탭으로 복구 (원래 권한 모드 · 원격 제어 그대로) |
-| 긴 작업을 맡기고 나갔는데, 맥이 잠들어서 작업이 멈춰 있다 · 밖에서 원격으로 이어서 하려는데 맥이 꺼져 있다 | **☕ 잠자기 방지**: Claude 세션이 열려 있는 동안 맥이 잠들지 않아요. 외출할 땐 **🧳 덮개를 닫아도 잠들지 않기** 한 번 |
-| 해당 세션의 터미널 창을 찾아 헤맨다 | [터미널로 이동] — 그 세션이 돌아가는 Terminal/iTerm 탭을 바로 앞으로 |
+## ⬇️ 설치 (macOS · 1분)
 
-그리고 계속 켜 두고 싶게 만드는 재미도 있어요. 화면을 뛰어다니는 펫, 다마고치(밥 · 잠 · 레벨), CPU가 바쁘면 화면을 질주, RunCat 스타일 메뉴 막대 시스템 모니터(CPU · 메모리 · 저장공간 · 배터리).
-
-## 설치
-
-1. [Releases](https://github.com/madirony/codepup/releases/latest) 에서 dmg 를 받아요. Apple Silicon(M1~M4)은 `arm64`, 인텔 맥은 `x64`.
-2. dmg 를 열고 **CodePup** 을 Applications 폴더로 드래그해요.
-3. **꼭 한 번 터미널에서 실행해요.** 서명이 없는 앱이라 이걸 안 하면 "손상된 앱"으로 열리지 않아요.
+1. **[최신 버전 받기](https://github.com/madirony/codepup/releases/latest)** — M1~M4 맥은 `arm64`, 인텔 맥은 `x64` dmg
+2. dmg 를 열고 **CodePup** 을 **Applications** 폴더로 끌어다 놓기
+3. **터미널에서 한 번 꼭 실행** (서명이 없는 앱이라 안 하면 "손상된 앱"으로 막혀요)
    ```sh
    xattr -cr /Applications/CodePup.app
    ```
-4. CodePup 을 열면 메뉴 막대에 강아지 아이콘이 생겨요.
-5. 세션을 다시 열 때 macOS 가 권한을 물어보면 허용해 주세요.
-   - **자동화**: iTerm · 터미널을 제어해서 세션을 탭으로 다시 열어요. 플러그인은 필요 없어요. iTerm 이 없으면 기본 터미널을 써요.
-   - **손쉬운 사용** (기본 터미널만): 탭으로 열려고 ⌘T 를 보내요. 허용하지 않으면 새 창으로 열려요.
+4. CodePup 을 열고 **[Claude Code 연결]** 클릭 → 끝!
 
-## 사용법
+> 세션을 다시 열 때 macOS 가 **자동화 · 손쉬운 사용** 권한을 물으면 허용해 주세요. iTerm 플러그인 같은 건 필요 없어요.
 
-1. 앱을 처음 켜면 **"Claude Code 연결"** 을 물어봐요. [연결]을 누르면 끝이에요.
-   - `~/.claude/settings.json` 에 훅을 추가해요. 기존 설정은 그대로 두고 처음 한 번 백업(`settings.json.codepup-backup`)을 남겨요.
-   - 설정 → Claude Code 탭에서 언제든 해제할 수 있어요.
-2. 터미널에서 평소처럼 `claude` 를 실행하세요. (이미 열려 있던 세션은 세션 보드 · 팝오버의 **[🔔 알림 켜기]** 한 번이면 같은 탭에서 이어서 다시 열려 알림이 켜져요.)
-3. 끝! 세션이 끝나거나 허락이 필요하면 펫이 알려 줘요.
+## ✨ 할 수 있는 것
 
-| 조작 | 동작 |
+| | |
 | --- | --- |
-| 말풍선 버튼 | 허락 · 거절 · 터미널로 이동 · 보드 |
-| 빨간 배지 클릭 / ⌥⌘J | 세션 보드 열기 · 닫기 |
-| 펫 오른쪽 클릭 | 세션 보드 · 밥 · 잠 · 스킨 |
-| 메뉴 막대 아이콘 왼쪽 클릭 | 팝오버: 허락 카드 · 세션 목록 · 시스템 상태 · 닫힌 세션 골라 열기 · ☕ 잠자기 방지 |
-| 메뉴 막대 아이콘 오른쪽 클릭 | 메뉴: 설정 · 스킨 · 메뉴 막대 표시 항목 · 종료 |
-| 클릭 / 꾹 누르기 / 드래그 / 던지기 | 쓰다듬기 / 계속 쓰담쓰담 / 들어서 옮기기 / 날아가서 어지러워함 |
+| 🔔 **그 자리에서 허락** | 허락이 필요하면 펫이 달려와서 **[허락] [거절]**. 터미널로 안 가도 세션이 바로 진행돼요 |
+| ✅ **작업 끝 알림** | 끝나면 "작업 끝!"과 답변 첫 문장. 평소엔 조용해서 **소리가 나면 = 나를 부르는 것** |
+| 🐾 **메뉴 막대 팝오버** | 강아지 아이콘을 누르면 허락 대기 · 세션 목록 · CPU · 메모리 · 배터리를 한눈에 |
+| 🗂 **세션 보드** (⌥⌘J) | 세션이 10개여도 기다리는 것만 크게, 나머지는 한 줄씩. 답변은 마크다운으로 깔끔하게 |
+| 🔁 **닫힌 세션 골라서 다시 열기** | 터미널을 닫아 버린 세션을 골라서 쓰던 창에 탭으로. 원래 권한 모드 · 원격 제어(--rc) 그대로 |
+| ☕ **잠자기 방지** | 세션이 열려 있는 동안 맥이 안 잠들어요. 외출할 땐 "덮개를 닫아도 잠들지 않기" |
 
-### ☕ 잠자기 방지 (밖에서 원격 작업하는 분께)
-| 설정 | 동작 |
-| --- | --- |
-| **Claude 세션이 열려 있으면** (기본) | 세션이 하나라도 열려 있으면 깨어 있어요. 휴대폰 · claude.ai 에서 원격으로 다음 지시를 보낼 수 있게 |
-| Claude 가 일할 때만 | 작업 중 · 허락 대기 중일 때만. 끝나면 2분 뒤 풀어요 |
-| 지금부터 계속 깨어 있기 | caffeinate 처럼 직접 켜고 끄기 (앱을 다시 켜도 유지) |
-| 🧳 덮개를 닫아도 잠들지 않기 | macOS 는 덮개를 닫으면 잠자기 방지 앱이 있어도 잠들어요. 이 스위치는 `pmset disablesleep` 으로 막아요 (관리자 암호 한 번). 돌아오면 꺼 주세요 |
+<p>
+  <img src="docs/images/popover.png" width="300" alt="메뉴 막대 팝오버">
+  <img src="docs/images/board.png" width="300" alt="세션 보드">
+</p>
 
-메뉴 막대에 ☕ 가 보이면 잠자기를 막고 있는 중이에요. 다른 앱(caffeinate · Amphetamine 등)이 이미 막고 있으면 그것도 알려 줘요.
+그리고 다마고치처럼 쓰다듬고 · 던지고 · 밥 주고 · 레벨 업. 기본 캐릭터는 블랙탄 치와와 **'초코'**, 스킨으로 **스피키**("쪼아요~ 쪼아요~")도 들어 있어요.
 
-### 이미 열려 있던 세션도 잡혀요
-터미널에서 돌고 있는 `claude` 프로세스(ps · lsof)와 최근 대화 기록(`~/.claude/projects`)으로 CodePup 을 켜기 전부터 열려 있던 세션도 찾아요. 터미널 창을 닫으면 그 터미널에서 claude 가 사라진 걸 보고 "닫힌 세션"으로 옮겨요.
-- Claude Code 는 세션을 시작할 때 훅을 읽어서, 연결 전에 연 세션은 알림을 못 보내요. 이런 세션은 🔕 로 표시되고 **[🔔 알림 켜기]** 를 누르면 그 탭의 claude 를 끝내고 같은 탭에서 원래 옵션 그대로 `--resume` 해요.
-- CodePup 은 **상태 표시줄(`statusLine`)을 건드리지 않아요.** claude-hud 같은 걸 쓰고 있으면 그대로예요. (2.5.1 이하가 바꿔 둔 설정은 앱을 켜면 원래대로 돌려놔요.)
-- 요금제 한도 · 토큰 사용량은 추적하지 않아요. Anthropic API 를 부르지도 않고, 모든 통신은 내 컴퓨터 안(127.0.0.1)에서만 해요.
+## 🙋 자주 묻는 것
 
-### 🔁 닫힌 세션 다시 열기는 무엇을 여나요?
-| 세션이 끝난 방식 | 다시 열기 대상 |
-| --- | --- |
-| 터미널 창이 닫힘 · 맥 재시동 등으로 갑자기 사라짐 | ✅ 포함 |
-| `/exit` · Ctrl+D 로 직접 끝냄, `/clear` · `/resume` 으로 다른 세션으로 옮김 | ❌ 제외 (맘에 안 들어서 닫은 세션이 되살아나지 않아요) |
+<details>
+<summary><b>이거 써도 계정 정지 안 당해요?</b></summary>
 
-- 팝오버 · 세션 보드에서 **체크박스로 골라서** 열 수 있어요. "전부 다시 열기"는 목록을 먼저 보여 주고 확인을 받아요. 다시 열기 싫은 세션은 세션 보드에서 ✕ 로 지울 수 있어요.
-- 세션이 원래 돌던 **권한 모드**(`--dangerously-skip-permissions`, auto 등)를 기억해서 그대로 열어요.
-- 설정 → Claude Code 에서 **원격 제어(`--rc`)** 와 **권한 확인 건너뛰기(`--dangerously-skip-permissions`)** 를 켠 채로 열지 고를 수 있어요. 권한 확인을 건너뛴 세션은 허락 말풍선이 뜨지 않아요.
+Claude Code 의 **공식 훅** 기능만 써요. API 를 부르지 않고, 로그인 정보를 만지지 않고, 대신 프롬프트를 보내지도 않아요. 모든 통신은 내 컴퓨터 안(127.0.0.1)에서만 해요. 허락도 **내가 버튼을 눌러야** 진행돼요 (절대 자동으로 허락하지 않아요).
+</details>
 
-### 동작 방식과 안전장치
+<details>
+<summary><b>이미 열어 둔 세션도 알려 주나요?</b></summary>
+
+보드 · 팝오버에 바로 떠요. 다만 Claude Code 는 세션을 시작할 때 훅을 읽어서, 연결 전에 연 세션은 🔕 알림이 꺼져 있어요. **[🔔 알림 켜기]** 한 번이면 같은 탭에서 그대로 이어서 다시 열려요.
+</details>
+
+<details>
+<summary><b>어떤 세션을 "다시 열기" 해 주나요?</b></summary>
+
+터미널 창이 닫히거나 맥이 꺼져서 **갑자기 사라진 세션만**요. `/exit` 로 직접 끝낸 세션은 되살리지 않아요. iTerm 이 있으면 iTerm, 없으면 기본 터미널로 열고, 설정에서 고정할 수 있어요.
+</details>
+
+<details>
+<summary><b>게임 · 전체 화면에서도 보여요?</b></summary>
+
+전체 화면 앱(터미널 · IDE · 유튜브) 위에도 떠요. 롤 같은 게임의 전체 화면 · 테두리 없음 모드는 게임이 화면을 독점해서 안 보이고, **창 모드**에서는 보여요.
+</details>
+
+<details>
+<summary><b>끄거나 지우고 싶어요</b></summary>
+
+설정 → Claude Code → [연결 해제] 를 누르면 추가한 훅을 지우고 원래 설정으로 돌아가요. 처음 연결할 때 `~/.claude/settings.json.codepup-backup` 백업도 남겨 둬요. 앱이 꺼져 있으면 Claude Code 에 아무 영향이 없어요.
+</details>
+
+---
+
+<details>
+<summary>🛠 개발자용 (구조 · 빌드 · 스킨 만들기)</summary>
+
+### 동작 방식
 ```
-Claude Code 세션들 ──(훅: 시작·권한 요청·도구 사용·완료·종료)──▶ ~/.codepup/codepup-hook.sh
-                                                              │ curl (127.0.0.1 + 실행마다 바뀌는 토큰)
-                                                              ▼
-                                               펫 앱의 로컬 브리지 ──▶ 말풍선 · 세션 보드 · 메뉴 막대
+Claude Code 세션들 ──(공식 훅)──▶ ~/.codepup/codepup-hook.sh ──curl 127.0.0.1 + 토큰──▶ CodePup ──▶ 말풍선 · 팝오버 · 보드
 ```
-- 브리지는 **내 컴퓨터(127.0.0.1)에서만** 열리고, 앱을 켤 때마다 새로 만드는 토큰으로 잠겨요.
-- 앱이 꺼져 있으면 훅은 아무것도 하지 않고 바로 끝나서, Claude Code 사용에 영향이 없어요.
-- 권한 요청은 **절대 자동으로 허락하지 않아요.** 펫에서 답이 없으면(기본 60초) 터미널의 원래 권한 창으로 넘어가요.
+- 브리지는 내 컴퓨터(127.0.0.1)에서만 열리고, 앱을 켤 때마다 바뀌는 토큰으로 잠겨요.
+- 이미 돌고 있는 세션은 `ps` · `lsof` 와 `~/.claude/projects` 대화 기록으로 찾아요.
+- 상태 표시줄(`statusLine`)은 건드리지 않아요. claude-hud 등은 그대로예요.
 
-## 캐릭터와 스킨
-- 기본 캐릭터 **블랙탄 치와와 '초코'**는 이 앱을 위해 새로 그린 오리지널 캐릭터예요. 목소리는 녹음 없이 즉석에서 만드는 **옹알이 목소리**라서, 어떤 말풍선이든 상황에 맞게 "멍멍" 해요.
-- **스피키 스킨**: 트릭컬의 스피키를 기본 제공 스킨으로 넣었어요. 설정 → 커스텀 → 스킨에서 [사용하기]를 누르면 "쪼아요~" 하며 세션을 지켜봐요. (트릭컬 팬메이드 · 비상업적)
-- **스킨**: `skin.json`(또는 `default.png` 등 표정 이름으로 된 이미지)이 든 폴더를 불러오면 캐릭터 · 소리를 통째로 바꿀 수 있어요. 표정 · 소리를 하나씩 바꾸는 것도 돼요.
+### 빌드 · 테스트
+```bash
+npm install
+npm start          # 개발 모드
+npm test           # 단위 테스트
+npm run dist:mac   # dmg 빌드 (macOS)
+SMOKE_OUT=/tmp/smoke xvfb-run -a npx electron test/smoke-main.js --no-sandbox   # 전체 흐름 스모크 테스트
+```
+`main` 에 push 하면 GitHub Actions 가 테스트 후 dmg 를 빌드하고, `package.json` 버전의 Release 가 없으면 자동으로 만들어요.
 
-skin.json 예시:
+### 스킨 만들기
+`skin.json` (또는 `default.png` 등 표정 이름 이미지)이 든 폴더를 설정 → 커스텀 → [스킨 폴더 불러오기] 로 넣으면 돼요.
 ```json
 {
   "name": "우리 집 고양이",
@@ -97,53 +102,18 @@ skin.json 예시:
   "catchphrase": "냐옹",
   "voice": { "type": "babble", "pitch": 1.6 },
   "images": { "default": "default.png", "happy": "happy.png", "alert": "alert.png", "worry": "worry.png", "sleep": "sleep.png" },
-  "sounds": { "done": ["done.mp3"] }
+  "sounds": { "done": ["done.mp3"] },
+  "soundRepeat": { "done": 2 }
 }
 ```
 
-## 설치
-1. [Releases](../../releases) 에서 dmg를 받아 열고, **CodePup** 을 **Applications** 폴더로 드래그해요. (Apple Silicon: `arm64`, Intel: `x64`)
-2. Apple 개발자 인증서로 서명하지 않은(애드혹 서명) 앱이라, 처음 실행이 막히면 터미널에서 한 번만 실행해 주세요.
-   ```bash
-   xattr -cr /Applications/CodePup.app
-   ```
-3. Dock이 아니라 **메뉴 막대**에 아이콘이 생겨요.
-
-## 개발
-```bash
-npm install
-npm start                 # 개발 모드 실행
-npm test                  # 단위 테스트 (다마고치 · 세션 허브 · 브리지 · 훅 설치기)
-npm run dist:mac          # dmg 빌드 (macOS 에서)
-python3 tools/draw_chihuahua.py   # 치와와 표정 20종 · 앱 아이콘 다시 그리기
-```
-- 스모크 테스트(가짜 Claude Code 세션으로 전체 흐름 확인): `SMOKE_OUT=/tmp/smoke xvfb-run -a npx electron test/smoke-main.js --no-sandbox`
-- **자동 배포**: `main` 에 push 하면 GitHub Actions(macOS 러너)가 테스트 후 dmg를 빌드해요. 이때 `package.json` 의 `version` 에 해당하는 Release(`v<version>`)가 아직 없으면 **태그와 Release를 자동으로 만들고 dmg를 첨부**해요. 새 버전을 배포하려면 version 만 올려서 push 하면 돼요. 태그를 직접 push 해도 돼요.
-  ```bash
-  git tag v2.1.0 && git push origin v2.1.0
-  ```
-  또는 GitHub → **Actions → Build & Release → Run workflow** 에 버전(예: `2.1.0`)을 넣고 실행해도 태그와 Release가 함께 만들어져요.
-
 ### 구조
 ```
-codepup/
-├─ .github/workflows/release.yml   테스트 · dmg 빌드 · 태그 시 Release 배포
-├─ src/main/
-│  ├─ main.js           앱 진입점 · 창 · IPC · codepup:// 프로토콜
-│  ├─ sessions.js       Claude Code 세션 허브 (상태 · 권한 대기 · 복구 기록)
-│  ├─ bridge.js         로컬 브리지 서버 + 훅 스크립트 · ~/.claude/settings.json 설치기
-│  ├─ terminals.js      터미널로 이동 · 닫힌 세션 다시 열기 (AppleScript)
-│  ├─ skins.js          스킨 불러오기 · 목록
-│  ├─ tray.js           메뉴 막대 (세션 · 시스템 상태 · RunCat 아이콘)
-│  ├─ system-stats.js   CPU · 메모리 · 저장공간 · 배터리
-│  ├─ pet-state.js      다마고치 상태 로직
-│  └─ store.js · defaults.js
-├─ src/renderer/pet/    펫 (PixiJS 메쉬 · 행동 · 알림 말풍선 · 옹알이 목소리)
-├─ src/renderer/panel/  세션 보드
-├─ src/renderer/settings/ 설정 창
-├─ assets/skins/        chihuahua (기본 캐릭터) · speaki (팬메이드 스킨)
-└─ tools/               캐릭터 그리기 스크립트
+src/main/       main.js (창 · IPC) · sessions.js (세션 허브) · bridge.js (훅 · 브리지) · terminals.js (터미널 제어)
+                tray.js (메뉴 막대) · keep-awake.js · transcripts.js · skins.js · pet-state.js · store.js
+src/renderer/   pet/ (펫) · popover/ (메뉴 막대 팝오버) · panel/ (세션 보드) · settings/ (설정) · shared/
+assets/skins/   chihuahua (기본) · speaki (팬메이드)
 ```
+</details>
 
----
-*스피키 스킨: 트릭컬 / Trickcal / トリッカル — 비상업적 팬 메이드*
+*스피키 스킨: 트릭컬 / Trickcal — 비상업적 팬 메이드*
