@@ -130,7 +130,18 @@
     $('muted-text').textContent = `🔕 알림이 꺼진 세션 ${muted.length}개 (연결 전에 연 세션)`;
 
     const rest = sessions.filter((s) => !(s.pending && s.pending.kind === 'permission')).sort((a, b) => rank(a) - rank(b) || b.updatedAt - a.updatedAt);
-    $('list').replaceChildren(...(rest.length ? rest.map(row) : [el('div', 'empty', sessions.length ? '다른 세션은 없어요' : '터미널에서 claude 를 실행하면 여기에 떠요')]));
+    // 많아도 5개까지만 (일하는 중 · 끝남 순), 나머지는 보드에서
+    const MAX = 5;
+    const rows = rest.slice(0, MAX).map(row);
+    if (rest.length > MAX) {
+      const more = el('div', 'row more', `… 외 ${rest.length - MAX}개 · 크게 보기`);
+      more.addEventListener('click', () => {
+        api.menuAction('open-panel', {});
+        api.closePopover();
+      });
+      rows.push(more);
+    }
+    $('list').replaceChildren(...(rows.length ? rows : [el('div', 'empty', sessions.length ? '다른 세션은 없어요' : '터미널에서 claude 를 실행하면 여기에 떠요')]));
 
     // 닫힌 세션 고르기 (일부만 열 수 있게)
     if (picking && !restorable.length) picking = false;
